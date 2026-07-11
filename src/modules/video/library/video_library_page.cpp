@@ -207,8 +207,7 @@ void VideoLibraryPage::rebuild() {
         if (it != thumbCache_.end() && !it->second.empty()) {
             std::wstring abs = AppDataDir::instance().toAbsolute(
                 util::utf8_to_wide(it->second));
-            auto img = std::make_shared<ImageIcon>();
-            img->path = abs;
+            auto img = std::make_shared<ImageIcon>(abs);
             thumbWidget = img;
         } else {
             // 占位：深色背景 + 图标
