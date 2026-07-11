@@ -60,32 +60,58 @@ jobs:
           Get-ChildItem mpv-dev-extract -Recurse -Filter "*.h" |
             Where-Object { $_.DirectoryName -like "*\mpv" } |
             ForEach-Object { Copy-Item $_.FullName third_party/mpv/include/mpv/ }
-          # dll（运行时依赖）
-          Get-ChildItem mpv-dev-extract -Recurse -Filter "mpv*.dll" |
+          # dll（运行时依赖，注意 shinchiro 的 dll 名为 libmpv-2.dll）
+          Get-ChildItem mpv-dev-extract -Recurse -Filter "*.dll" |
             ForEach-Object { Copy-Item $_.FullName third_party/mpv/ }
-          # def 文件
-          $defFile = Get-ChildItem mpv-dev-extract -Recurse -Filter "mpv.def" | Select-Object -First 1
-          if ($defFile) { Copy-Item $defFile.FullName third_party/mpv/ }
 
           Write-Host "===== third_party/mpv 结构 ====="
           Get-ChildItem third_party/mpv -Recurse | Select-Object FullName
 
-      - name: Generate mpv.lib from def
+      - name: Generate mpv.lib from dll exports
         shell: pwsh
         run: |
-          # shinchiro 的 mpv-dev 包不含 MSVC import library（mpv.lib），
-          # 只有 MinGW 的 libmpv.dll.a 和 mpv.def。
-          # 用 MSVC 的 lib.exe 从 .def 生成 mpv.lib（链接时指向 mpv-2.dll）。
+          # shinchiro 的 mpv-dev 包不含 MSVC import library（mpv.lib）也不含 .def，
+          # 只有 MinGW 的 libmpv.dll.a 和 libmpv-2.dll。
+          # 用 dumpbin 从 dll 导出符号 → 生成 .def → lib.exe 生成 mpv.lib
           Push-Location third_party/mpv
-          if (Test-Path mpv.lib) {
-            Write-Host "mpv.lib 已存在，跳过生成"
-          } elseif (Test-Path mpv.def) {
-            Write-Host "从 mpv.def 生成 mpv.lib ..."
-            & lib /def:mpv.def /name:mpv-2.dll /out:mpv.lib /MACHINE:X64
-            if ($LASTEXITCODE -ne 0) { throw "lib.exe 生成 mpv.lib 失败" }
-          } else {
-            throw "既无 mpv.lib 也无 mpv.def，无法生成 import library"
+
+          # 找到 dll（名为 libmpv-2.dll 或 mpv-2.dll）
+          $dll = Get-ChildItem -Filter "*.dll" | Select-Object -First 1
+          if (-not $dll) { throw "未找到 mpv dll" }
+          $dllName = $dll.Name
+          Write-Host "使用 dll: $dllName"
+
+          # 1. dumpbin 导出符号 → 构造 .def
+          Write-Host "从 $dllName 导出符号..."
+          $exports = & dumpbin /exports $dllName
+          # 解析输出：找到 "ordinal" 表头后的行，格式: [1] 0 func_name
+          $lines = $exports -split "`r?`n"
+          $inTable = $false
+          $funcNames = @()
+          foreach ($line in $lines) {
+            if ($line -match "ordinal") { $inTable = $true; continue }
+            if (-not $inTable) { continue }
+            # 表结束：空行或 "Summary"
+            if ($line -match "^\s*$" -or $line -match "Summary") { break }
+            # 匹配: "        1    0 00001000 mpv_create"
+            if ($line -match "^\s*\d+\s+[0-9A-Fa-f]+\s+[0-9A-Fa-f]+\s+(\S+)") {
+              $funcNames += $matches[1]
+            }
           }
+          Write-Host "导出符号数: $($funcNames.Count)"
+
+          # 2. 写 .def
+          $defContent = "LIBRARY `"$dllName`"`r`nEXPORTS`r`n"
+          foreach ($name in $funcNames) { $defContent += "  $name`r`n" }
+          Set-Content -Path mpv.def -Value $defContent -Encoding ASCII
+          Write-Host "===== mpv.def 前 10 行 ====="
+          Get-Content mpv.def | Select-Object -First 10
+
+          # 3. lib.exe 生成 mpv.lib
+          Write-Host "生成 mpv.lib ..."
+          & lib /def:mpv.def /name:$dllName /out:mpv.lib /MACHINE:X64
+          if ($LASTEXITCODE -ne 0) { throw "lib.exe 生成 mpv.lib 失败" }
+
           Write-Host "===== 生成后 third_party/mpv 结构 ====="
           Get-ChildItem | Select-Object Name, Length
           Pop-Location
@@ -115,9 +141,8 @@ jobs:
           }
           if (-not (Test-Path $exe)) { throw "未找到 MEPlayer.exe" }
           Copy-Item $exe $out/
-          # mpv 运行时
-          Copy-Item third_party/mpv/mpv-2.dll $out/
-          Copy-Item third_party/mpv/mpv.dll $out/ -ErrorAction SilentlyContinue
+          # mpv 运行时（拷贝所有 dll，shinchiro 的名为 libmpv-2.dll）
+          Copy-Item third_party/mpv/*.dll $out/ -ErrorAction SilentlyContinue
           # vcpkg 动态库依赖（taglib/sqlite3/libcurl 等）
           if (Test-Path vcpkg_installed/x64-windows/bin) {
             Copy-Item vcpkg_installed/x64-windows/bin/*.dll $out/ -ErrorAction SilentlyContinue
