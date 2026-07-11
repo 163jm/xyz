@@ -102,14 +102,20 @@ jobs:
           Write-Host "从 $dllName 导出符号..."
           $exports = & dumpbin /exports $dllName
           # 解析输出：找到 "ordinal" 表头后的行，格式: [1] 0 func_name
+          # 注意：表头行后紧跟一个空行，再才是数据行，不能把这个空行当作表结束标志，
+          # 否则会在读到任何数据前就 break，导致导出符号数为 0。
           $lines = $exports -split "`r?`n"
           $inTable = $false
           $funcNames = @()
           foreach ($line in $lines) {
             if ($line -match "ordinal") { $inTable = $true; continue }
             if (-not $inTable) { continue }
-            # 表结束：空行或 "Summary"
-            if ($line -match "^\s*$" -or $line -match "Summary") { break }
+            # 空行：表头后的空行要跳过继续找数据行；只有在已经收集到符号之后
+            # 出现的空行，才代表数据表真正结束。
+            if ($line -match "^\s*$") {
+              if ($funcNames.Count -gt 0) { break } else { continue }
+            }
+            if ($line -match "Summary") { break }
             # 匹配: "        1    0 00001000 mpv_create"
             if ($line -match "^\s*\d+\s+[0-9A-Fa-f]+\s+[0-9A-Fa-f]+\s+(\S+)") {
               $funcNames += $matches[1]
