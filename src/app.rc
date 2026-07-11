@@ -1,0 +1,37 @@
+// MEPlayer 应用资源
+#include <windows.h>
+
+// 程序图标 ID（与 window_manager.cpp 中 MAKEINTRESOURCEW(1) 对应）
+#define IDI_APP_ICON 1
+
+// 程序图标（从 assets/icons/app_icon.ico 引用）
+IDI_APP_ICON ICON "assets/icons/app_icon.ico"
+
+// 版本信息
+VS_VERSION_INFO VERSIONINFO
+FILEVERSION    1,0,0,0
+PRODUCTVERSION 1,0,0,0
+FILEFLAGSMASK  0x3fL
+FILEFLAGS      0x0L
+FILEOS         VOS_NT_WINDOWS32
+FILETYPE       VFT_APP
+FILESUBTYPE    0x0L
+BEGIN
+    BLOCK "StringFileInfo"
+    BEGIN
+        BLOCK "040904B0"
+        BEGIN
+            VALUE "CompanyName",      "MEPlayer"
+            VALUE "FileDescription",  "MEPlayer - Native Windows Media Player"
+            VALUE "FileVersion",      "1.0.0.0"
+            VALUE "InternalName",     "MEPlayer"
+            VALUE "OriginalFilename", "MEPlayer.exe"
+            VALUE "ProductName",      "MEPlayer"
+            VALUE "ProductVersion",   "1.0.0.0"
+        END
+    END
+    BLOCK "VarFileInfo"
+    BEGIN
+        VALUE "Translation", 0x409, 1200
+    END
+END
