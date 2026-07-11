@@ -1,0 +1,9 @@
+{
+  "name": "meplayer",
+  "version-string": "1.0.0",
+  "dependencies": [
+    "taglib",
+    "sqlite3",
+    "curl"
+  ]
+}
