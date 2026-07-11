@@ -5,7 +5,7 @@
 #define IDI_APP_ICON 1
 
 // 程序图标（从 assets/icons/app_icon.ico 引用）
-IDI_APP_ICON ICON "assets/icons/app_icon.ico"
+IDI_APP_ICON ICON APP_ICON_PATH
 
 // 版本信息
 VS_VERSION_INFO VERSIONINFO
