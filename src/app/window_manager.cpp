@@ -51,6 +51,22 @@ bool WindowManager::init(HINSTANCE hInst) {
     if (!createD3D()) return false;
     if (!createD2D()) return false;
 
+    // CreateWindowExW 内部会同步派发 WM_SIZE（在函数返回前），
+    // 此时 rt_ 还未创建，WM_SIZE 处理里的 "if (wm.rt_)" 判断为假，
+    // 这次尺寸更新被直接丢弃。加上 width_/height_ 此前被赋值为
+    // CreateWindowExW 参数里的 w/h（窗口整体尺寸，包含标题栏/边框，
+    // 而非客户区尺寸），如果后续用户不手动拖拽调整窗口大小，
+    // 就再也没有 WM_SIZE 来纠正它们——导致布局系统始终按一个
+    // 偏大且不准确的尺寸计算，与实际客户区（更小）不符，
+    // 表现为内容被挤压/固定显示在窗口左上角一小块区域。
+    // 这里在设备创建完成后，用真实客户区尺寸重新同步一次。
+    {
+        RECT rcClient;
+        GetClientRect(hwnd_, &rcClient);
+        width_ = rcClient.right - rcClient.left;
+        height_ = rcClient.bottom - rcClient.top;
+    }
+
     // 最小尺寸 900x600
     RECT rcMin = {0, 0, static_cast<LONG>(900 * dpi_ / 96), static_cast<LONG>(600 * dpi_ / 96)};
     AdjustWindowRectExForDpi(&rcMin, WS_OVERLAPPEDWINDOW, FALSE, 0, static_cast<UINT>(dpi_));
@@ -165,13 +181,11 @@ LRESULT WindowManager::WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
         return 0;
     }
     case WM_SIZE: {
-        if (wm.rt_) {
-            D2D1_SIZE_U size = D2D1::SizeU(LOWORD(lp), HIWORD(lp));
-            if (size.width > 0 && size.height > 0) {
-                wm.rt_->Resize(size);
-                wm.width_ = size.width;
-                wm.height_ = size.height;
-            }
+        D2D1_SIZE_U size = D2D1::SizeU(LOWORD(lp), HIWORD(lp));
+        if (size.width > 0 && size.height > 0) {
+            wm.width_ = size.width;
+            wm.height_ = size.height;
+            if (wm.rt_) wm.rt_->Resize(size);
         }
         return 0;
     }
