@@ -113,25 +113,42 @@ public:
     }
 
     // 事件转发：容器自身不处理，交给命中的子控件
+    // 坐标转换为相对于子控件的坐标
     bool onMouseDown(const MouseEvent& e) override {
         if (!child) return false;
         auto* h = child->hitTest(e.x, e.y);
-        return h ? h->onMouseDown(e) : false;
+        if (!h) return false;
+        MouseEvent relE = e;
+        relE.x -= h->bounds_.x;
+        relE.y -= h->bounds_.y;
+        return h->onMouseDown(relE);
     }
     bool onMouseUp(const MouseEvent& e) override {
         if (!child) return false;
         auto* h = child->hitTest(e.x, e.y);
-        return h ? h->onMouseUp(e) : false;
+        if (!h) return false;
+        MouseEvent relE = e;
+        relE.x -= h->bounds_.x;
+        relE.y -= h->bounds_.y;
+        return h->onMouseUp(relE);
     }
     bool onMouseMove(const MouseEvent& e) override {
         if (!child) return false;
         auto* h = child->hitTest(e.x, e.y);
-        return h ? h->onMouseMove(e) : false;
+        if (!h) return false;
+        MouseEvent relE = e;
+        relE.x -= h->bounds_.x;
+        relE.y -= h->bounds_.y;
+        return h->onMouseMove(relE);
     }
     bool onMouseWheel(const MouseEvent& e) override {
         if (!child) return false;
         auto* h = child->hitTest(e.x, e.y);
-        return h ? h->onMouseWheel(e) : false;
+        if (!h) return false;
+        MouseEvent relE = e;
+        relE.x -= h->bounds_.x;
+        relE.y -= h->bounds_.y;
+        return h->onMouseWheel(relE);
     }
 };
 
@@ -155,21 +172,39 @@ public:
     }
 
     // 事件转发：容器自身不处理，交给命中的子控件（从后往前，顶层优先）
+    // 注意：将绝对坐标转换为相对于命中子控件的坐标
     bool onMouseDown(const MouseEvent& e) override {
         auto* h = hitTest(e.x, e.y);
-        return h ? h->onMouseDown(e) : false;
+        if (!h) return false;
+        // 转换为相对坐标
+        MouseEvent relE = e;
+        relE.x -= h->bounds_.x;
+        relE.y -= h->bounds_.y;
+        return h->onMouseDown(relE);
     }
     bool onMouseUp(const MouseEvent& e) override {
         auto* h = hitTest(e.x, e.y);
-        return h ? h->onMouseUp(e) : false;
+        if (!h) return false;
+        MouseEvent relE = e;
+        relE.x -= h->bounds_.x;
+        relE.y -= h->bounds_.y;
+        return h->onMouseUp(relE);
     }
     bool onMouseMove(const MouseEvent& e) override {
         auto* h = hitTest(e.x, e.y);
-        return h ? h->onMouseMove(e) : false;
+        if (!h) return false;
+        MouseEvent relE = e;
+        relE.x -= h->bounds_.x;
+        relE.y -= h->bounds_.y;
+        return h->onMouseMove(relE);
     }
     bool onMouseWheel(const MouseEvent& e) override {
         auto* h = hitTest(e.x, e.y);
-        return h ? h->onMouseWheel(e) : false;
+        if (!h) return false;
+        MouseEvent relE = e;
+        relE.x -= h->bounds_.x;
+        relE.y -= h->bounds_.y;
+        return h->onMouseWheel(relE);
     }
 };
 
