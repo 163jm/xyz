@@ -124,15 +124,19 @@ target_link_libraries(MEPlayer PRIVATE
     comdlg32        # GetOpenFileName 文件选择
 )
 
-# ---- 拷贝 mpv-2.dll 到输出目录 ----
-add_custom_command(TARGET MEPlayer POST_BUILD
-    COMMAND ${CMAKE_COMMAND} -E copy_if_different
-        "${MPV_ROOT}/mpv-2.dll"
-        $<TARGET_FILE_DIR:MEPlayer>
-    COMMENT "Copy mpv-2.dll to output directory"
-)
+# ---- 拷贝 mpv dll 到输出目录（shinchiro 的 dll 名为 libmpv-2.dll）----
+file(GLOB MPV_DLLS "${MPV_ROOT}/*.dll")
+foreach(_dll ${MPV_DLLS})
+    add_custom_command(TARGET MEPlayer POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            "${_dll}" $<TARGET_FILE_DIR:MEPlayer>
+        COMMENT "Copy ${_dll} to output directory"
+    )
+endforeach()
 
 # ---- 安装 ----
 install(TARGETS MEPlayer RUNTIME DESTINATION bin)
-install(FILES "${MPV_ROOT}/mpv-2.dll" DESTINATION bin)
+foreach(_dll ${MPV_DLLS})
+    install(FILES "${_dll}" DESTINATION bin)
+endforeach()
 install(DIRECTORY ${CMAKE_SOURCE_DIR}/assets/icons DESTINATION assets)
