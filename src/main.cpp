@@ -124,16 +124,12 @@ public:
                      static_cast<float>(WindowManager::instance().width()),
                      static_cast<float>(WindowManager::instance().height())};
         if (currentPage_) {
-            if (currentPage_->needsLayout) {
-                currentPage_->layout(full);
-                currentPage_->needsLayout = false;
-            }
+            currentPage_->layout(full);
+            currentPage_->needsLayout = false;
             currentPage_->draw(rt);
         } else if (homePage_) {
-            if (homePage_->needsLayout) {
-                homePage_->layout(full);
-                homePage_->needsLayout = false;
-            }
+            homePage_->layout(full);
+            homePage_->needsLayout = false;
             homePage_->draw(rt);
         }
     }
