@@ -90,10 +90,20 @@ bool WindowManager::createD2D() {
     RECT rc;
     GetClientRect(hwnd_, &rc);
     D2D1_SIZE_U size = D2D1::SizeU(rc.right - rc.left, rc.bottom - rc.top);
+    // 渲染目标固定使用 96 DPI（即 1 DIP = 1 物理像素），不让 D2D 做二次缩放。
+    // 原因：本项目的整个布局系统（Rect/Row/Column/NavigationRail 等）、窗口尺寸计算
+    // （width_/height_，均来自 WM_SIZE 的物理像素）、以及鼠标事件坐标
+    // （GET_X_LPARAM/GET_Y_LPARAM，也是物理像素）全部按"1 单位=1 物理像素"处理。
+    // 若把渲染目标 DPI 设为系统真实 DPI（如 150% 缩放下的 144），
+    // D2D 会在绘制时把所有坐标再按 dpi_/96 放大一次，
+    // 造成"绘制出来的视觉位置"和"布局/命中测试用的坐标"不一致：
+    // 界面看起来错位，点击判定也对不上按钮实际显示的位置。
+    // 我们已经在创建窗口、处理 WM_DPICHANGED 时手动按 dpi_ 换算过物理像素尺寸，
+    // 布局系统本身并不感知 DPI，因此渲染目标应保持 96，交给我们自己统一按物理像素处理。
     D2D1_RENDER_TARGET_PROPERTIES props = D2D1::RenderTargetProperties(
         D2D1_RENDER_TARGET_TYPE_HARDWARE,
         D2D1::PixelFormat(DXGI_FORMAT_B8G8R8A8_UNORM, D2D1_ALPHA_MODE_PREMULTIPLIED),
-        dpi_, dpi_);
+        96.0f, 96.0f);
     D2D1_HWND_RENDER_TARGET_PROPERTIES hwndProps =
         D2D1::HwndRenderTargetProperties(hwnd_, size, D2D1_PRESENT_OPTIONS_NONE);
     return SUCCEEDED(d2d_factory_->CreateHwndRenderTarget(props, hwndProps, &rt_));
