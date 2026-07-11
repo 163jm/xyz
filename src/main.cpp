@@ -88,9 +88,18 @@ public:
         });
 
         // 10.1 鼠标事件回调：转发给当前活动页面（子页面优先于主页）
+        // ---- 临时调试信息：记录最近一次点击的原始坐标/窗口尺寸/命中结果 ----
+        // 用于在无法本地编译验证的情况下，通过实际运行截图定位问题，
+        // 待确认问题根因后可删除。
         WindowManager::instance().setMouseDownCallback([this](const MouseEvent& e) {
             Page* p = activePage();
-            if (p && p->onMouseDown(e)) WindowManager::instance().requestRedraw();
+            debugLastEvent_ = L"down(" + std::to_wstring((int)e.x) + L"," +
+                std::to_wstring((int)e.y) + L")";
+            Widget* hit = p ? p->hitTest(e.x, e.y) : nullptr;
+            debugLastEvent_ += hit ? L" hit=Y" : L" hit=N";
+            bool handled = p && p->onMouseDown(e);
+            debugLastEvent_ += handled ? L" handled=Y" : L" handled=N";
+            WindowManager::instance().requestRedraw();
         });
         WindowManager::instance().setMouseUpCallback([this](const MouseEvent& e) {
             Page* p = activePage();
@@ -134,6 +143,19 @@ public:
             homePage_->needsLayout = false;
             homePage_->draw(rt);
         }
+
+        // ---- 临时调试信息：屏幕右上角红字覆盖显示 ----
+        // 用于确认点击时的原始坐标/窗口尺寸/命中结果是否符合预期。
+        // 确认问题根因后应删除本段。
+        {
+            std::wstring info = L"win=" + std::to_wstring(WindowManager::instance().width()) +
+                L"x" + std::to_wstring(WindowManager::instance().height()) +
+                L" | " + debugLastEvent_;
+            Text dbg(info, 14, D2D1::ColorF(1, 0, 0, 1), DWRITE_FONT_WEIGHT_BOLD);
+            Size s = dbg.measure({full.w, 40});
+            dbg.layout({full.w - s.w - 8, 4, s.w, s.h});
+            dbg.draw(rt);
+        }
     }
 
     void run() {
@@ -168,6 +190,7 @@ private:
 
     std::shared_ptr<HomePage> homePage_;
     std::shared_ptr<Page>     currentPage_;
+    std::wstring              debugLastEvent_;  // 临时调试：确认根因后删除
 };
 
 }  // namespace meplayer
