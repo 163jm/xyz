@@ -1,0 +1,115 @@
+name: Build MEPlayer
+
+on:
+  workflow_dispatch:
+
+env:
+  BUILD_TYPE: Release
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Cache vcpkg
+        uses: actions/cache@v4
+        with:
+          path: |
+            ${{ env.VCPKG_ROOT }}/installed
+            vcpkg_installed
+          key: vcpkg-${{ runner.os }}-taglib-sqlite3-curl-${{ hashFiles('.github/workflows/build.yml') }}
+          restore-keys: vcpkg-${{ runner.os }}-
+
+      - name: Install dependencies via vcpkg
+        shell: pwsh
+        run: |
+          Write-Host "VCPKG_ROOT = $env:VCPKG_ROOT"
+          vcpkg install taglib sqlite3 curl --triplet x64-windows
+          vcpkg integrate install
+
+      - name: Download mpv-dev (latest)
+        shell: pwsh
+        run: |
+          # 查询 shinchiro/mpv-winbuild-cmake 的最新 release，取 mpv-dev-x86_64 资源
+          $repo = "shinchiro/mpv-winbuild-cmake"
+          $release = Invoke-RestMethod -Uri "https://api.github.com/repos/$repo/releases/latest" `
+            -Headers @{ "User-Agent" = "github-actions" }
+          $asset = $release.assets | Where-Object { $_.name -like "mpv-dev-x86_64-*.7z" } | Select-Object -First 1
+          if (-not $asset) { throw "未找到 mpv-dev-x86_64 资源" }
+          Write-Host "下载: $($asset.name)"
+          Invoke-WebRequest -Uri $asset.browser_download_url -OutFile mpv-dev.7z
+          7z x mpv-dev.7z -ompv-dev-extract -y
+          # 拷贝到 third_party/mpv/
+          New-Item -ItemType Directory -Force -Path third_party/mpv/include/mpv
+          Copy-Item mpv-dev-extract/include/mpv/*.h third_party/mpv/include/mpv/
+          Copy-Item mpv-dev-extract/mpv.lib third_party/mpv/
+          Copy-Item mpv-dev-extract/mpv-2.dll third_party/mpv/
+          Copy-Item mpv-dev-extract/mpv.dll third_party/mpv/ -ErrorAction SilentlyContinue
+          Write-Host "third_party/mpv 结构:"
+          Get-ChildItem third_party/mpv -Recurse | Select-Object FullName
+
+      - name: Configure CMake
+        run: |
+          cmake -B build -S . `
+            -DCMAKE_BUILD_TYPE=${{ env.BUILD_TYPE }} `
+            -DCMAKE_TOOLCHAIN_FILE=$env:VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake `
+            -DVCPKG_TARGET_TRIPLET=x64-windows
+
+      - name: Build
+        run: cmake --build build --config ${{ env.BUILD_TYPE }} --parallel
+
+      - name: Prepare artifact
+        shell: pwsh
+        run: |
+          $out = "MEPlayer-release"
+          New-Item -ItemType Directory -Force -Path $out
+          # 主程序
+          Copy-Item build/Release/MEPlayer.exe $out/ -ErrorAction SilentlyContinue
+          if (-not (Test-Path $out/MEPlayer.exe)) {
+            Copy-Item build/${{ env.BUILD_TYPE }}/MEPlayer.exe $out/ -ErrorAction SilentlyContinue
+          }
+          if (-not (Test-Path $out/MEPlayer.exe)) {
+            Get-ChildItem build -Recurse -Filter "MEPlayer.exe" | Select-Object FullName
+            throw "未找到 MEPlayer.exe"
+          }
+          # mpv 运行时
+          Copy-Item third_party/mpv/mpv-2.dll $out/
+          # vcpkg 动态库依赖（taglib/sqlite3/libcurl 等）
+          if (Test-Path vcpkg_installed/x64-windows/bin) {
+            Copy-Item vcpkg_installed/x64-windows/bin/*.dll $out/ -ErrorAction SilentlyContinue
+          }
+          # 资源
+          New-Item -ItemType Directory -Force -Path $out/assets/icons
+          Copy-Item assets/icons/app_icon.ico $out/assets/icons/
+          Copy-Item assets/icons/app_icon.png $out/assets/icons/
+          # appdata 占位目录
+          New-Item -ItemType Directory -Force -Path $out/appdata/thumbnails
+          Write-Host "产物目录:"
+          Get-ChildItem $out -Recurse | Select-Object FullName
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: MEPlayer-windows-x64
+          path: MEPlayer-release/
+          if-no-files-found: error
+
+      - name: Package zip for release
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: pwsh
+        run: |
+          Compress-Archive -Path MEPlayer-release/* -DestinationPath MEPlayer-${{ github.ref_name }}-windows-x64.zip
+
+      - name: Release on tag
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: MEPlayer-${{ github.ref_name }}-windows-x64.zip
+          draft: true
+          prerelease: false
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
