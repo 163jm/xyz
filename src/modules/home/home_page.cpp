@@ -25,9 +25,11 @@ HomePage::HomePage() {
         if (idx == current_) return;
         pages_[current_]->onInactive();
         pages_[current_]->visible = false;
+        pages_[current_]->interactive = false;
         current_ = idx;
         rail_->selectedIndex = idx;
         pages_[current_]->visible = true;
+        pages_[current_]->interactive = true;
         pages_[current_]->onActive();
         requestRedraw();
     };
@@ -76,7 +78,9 @@ void HomePage::rebuild() {
     // IndexedStack：只显示 current_ 对应的页面
     auto stack = std::make_shared<Stack>();
     for (int i = 0; i < 4; i++) {
-        pages_[i]->visible = (i == current_);
+        bool active = (i == current_);
+        pages_[i]->visible = active;
+        pages_[i]->interactive = active;
         stack->addChild(pages_[i]);
     }
     contentCol->addChild(stack);
