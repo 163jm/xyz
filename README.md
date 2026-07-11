@@ -40,15 +40,23 @@ vcpkg install taglib sqlite3 curl
 
 ### 放置 mpv 开发库
 
-从 [mpv-winbuild-cmake releases](https://github.com/shinchiro/mpv-winbuild-cmake/releases) 下载 `mpv-dev-x86_64-*.7z`，解压到 `third_party/mpv/`，确保包含：
+从 [mpv-winbuild-cmake releases](https://github.com/shinchiro/mpv-winbuild-cmake/releases) 下载 `mpv-dev-x86_64-*.7z`（注意不要下 `-v3-` 变体），解压到 `third_party/mpv/`，确保包含：
 
 ```
 third_party/mpv/
 ├── include/mpv/client.h
 ├── include/mpv/render.h
 ├── include/mpv/render_d3d11.h
-├── mpv.lib
-└── mpv-2.dll
+├── mpv-2.dll        # 运行时
+├── mpv.def          # 模块定义文件
+└── (libmpv.dll.a)   # MinGW import library，MSVC 不用
+```
+
+注意：shinchiro 的 mpv-dev 包**不含 MSVC 的 `mpv.lib`**。CMake 配置时会自动用 MSVC `lib.exe` 从 `mpv.def` 生成。若自动生成失败（未在 MSVC 环境下），手动在「x64 Native Tools Command Prompt」执行：
+
+```cmd
+cd third_party\mpv
+lib /def:mpv.def /name:mpv-2.dll /out:mpv.lib /MACHINE:X64
 ```
 
 ### 编译

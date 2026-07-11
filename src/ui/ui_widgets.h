@@ -528,30 +528,28 @@ private:
     void ensureAutoScroll();
 };
 
-// ---- VideoView：mpv 视频渲染挂载点 ----
-// 持有 MpvBackend*，layout 时按 bounds 创建/调整 D3D11 纹理 + RTV，
-// draw 时调用 backend->render() 把 mpv 帧绘制到该纹理，再贴到 D2D。
+// ---- VideoView：mpv 视频嵌入挂载点（wid 模式）----
+// 创建一个 Win32 子窗口作为 mpv 的 wid 嵌入目标。
+// layout 时调整子窗口尺寸；mpv 自行渲染到该子窗口。
 class VideoView : public Widget {
 public:
     MpvBackend* backend = nullptr;
     D2D1_COLOR_F bgColor = D2D1::ColorF(0, 0, 0, 1);
 
-    VideoView() = default;
+    VideoView();
+    ~VideoView() override;
     Size measure(const Size& max) override;
     void layout(const Rect& b) override;
     void draw(ID2D1RenderTarget* rt) override;
     Widget* hitTest(float x, float y) override;
 
-    // 暴露 RTV 供外部 backend->init(d3dDevice, rtv) 使用
-    ID3D11RenderTargetView* rtv() const { return rtv_.Get(); }
-    ID3D11Texture2D* texture() const { return tex_.Get(); }
+    // 暴露嵌入子窗口句柄供 backend->init(hwnd) 使用
+    HWND hwnd() const { return hwnd_; }
+    void ensureHwnd();   // 手动触发子窗口创建（layout 前预创建）
+
 private:
-    ComPtr<ID3D11Texture2D> tex_;
-    ComPtr<ID3D11RenderTargetView> rtv_;
-    ComPtr<ID2D1Bitmap> bitmap_;
-    float texW_ = 0, texH_ = 0;
-    bool ensureResources(float w, float h);
-    void releaseResources();
+    HWND hwnd_ = nullptr;        // 嵌入子窗口
+    void releaseHwnd();
 };
 
 // ---- MiniPlayerBar：底部播放栏（高 64），按 MiniBarKind 显示不同内容 ----

@@ -10,6 +10,10 @@
 #include <memory>
 #include <map>
 
+#ifdef _WIN32
+#include <windows.h>
+#endif
+
 namespace meplayer {
 
 // 歌词行
@@ -54,8 +58,8 @@ class GlobalPlayer {
 public:
     static GlobalPlayer& instance();
 
-    // 在 App 启动时创建常驻 mpv（预热）
-    bool warmup(ID3D11Device* d3dDevice);
+    // 在 App 启动时创建常驻 mpv（预热，纯音频保活）
+    bool warmup(HWND parentHwnd);
 
     // 音乐播放列表
     struct PlayItem {

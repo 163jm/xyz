@@ -555,9 +555,10 @@ void IptvPlayerPage::layout(const Rect& b) {
     if (needsRebuild_) { needsRebuild_ = false; rebuildUI(); }
     if (root_) root_->layout(b);
 
-    // 首次布局后 video_ RTV 就绪 → 初始化 backend
-    if (backend_ && video_ && video_->rtv() && !backend_->handle()) {
-        if (backend_->init(WindowManager::instance().d3dDevice(), video_->rtv())) {
+    // 首次布局后 video_ 子窗口就绪 → 初始化 backend（wid 嵌入模式）
+    if (backend_ && video_) video_->ensureHwnd();
+    if (backend_ && video_ && video_->hwnd() && !backend_->handle()) {
+        if (backend_->init(video_->hwnd(), WindowManager::instance().hwnd())) {
             applyMpvOptions();
             // 确定初始源索引
             int idx = initialSourceIdx_;

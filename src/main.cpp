@@ -53,7 +53,7 @@ public:
         TrayService::instance().init(WindowManager::instance().hwnd(), hInst);
 
         // 8. 全局音乐播放器预热
-        GlobalPlayer::instance().warmup(WindowManager::instance().d3dDevice());
+        GlobalPlayer::instance().warmup(WindowManager::instance().hwnd());
 
         // 9. 主页
         homePage_ = std::make_shared<HomePage>();

@@ -32,12 +32,12 @@ void VideoPlayerPage::onActive() {
 
     GlobalPlayer::instance().stopMusicForOtherPlayback();
 
+    // 确保 VideoView 子窗口已创建（wid 嵌入目标）
+    if (video_) video_->ensureHwnd();
+    HWND videoHwnd = video_ ? video_->hwnd() : nullptr;
+
     backend_ = std::make_unique<MpvBackend>();
-    // 用主窗口 D3D 设备 + VideoView 的 RTV
-    // 简化：传 nullptr，backend 内部创建 1x1 隐藏 RTV
-    // 实际视频渲染由 VideoView 接管
-    // TODO: 真正的 RTV 绑定需要 VideoView 提供纹理
-    if (!backend_->init(WindowManager::instance().d3dDevice(), nullptr)) {
+    if (!backend_->init(videoHwnd, WindowManager::instance().hwnd())) {
         backend_.reset();
         return;
     }

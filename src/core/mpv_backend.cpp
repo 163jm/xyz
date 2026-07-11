@@ -1,8 +1,12 @@
-// libmpv 后端封装：mpv 实例 + D3D11 渲染上下文 + 事件线程
+// libmpv 后端封装（wid 嵌入模式）：mpv 实例 + 事件线程
 #include "core/mpv_backend.h"
 #include <cstring>
 #include <cstdio>
 #include <utility>
+
+#ifdef _WIN32
+#include <windows.h>
+#endif
 
 namespace meplayer {
 
@@ -12,13 +16,14 @@ MpvBackend::~MpvBackend() {
     dispose();
 }
 
-// 初始化 mpv 实例 + D3D11 渲染上下文
-//   d3dDevice:    共享主窗口的 D3D11 设备
-//   renderTarget: mpv 渲染输出的 RTV（视频画面）；为 nullptr 时创建 1x1 隐藏 RTV（音乐保活用）
-bool MpvBackend::init(ID3D11Device* d3dDevice, ID3D11RenderTargetView* renderTarget) {
-    if (!d3dDevice) return false;
-    d3d_device_ = d3dDevice;
+// 纯音频模式的隐藏保活子窗口过程（仅处理 WM_DESTROY）
+static LRESULT CALLBACK HiddenMpvWndProc(HWND h, UINT msg, WPARAM w, LPARAM l) {
+    return DefWindowProcW(h, msg, w, l);
+}
 
+// 初始化 mpv 实例
+//   videoHwnd: 视频输出嵌入的 Win32 子窗口；nullptr 则创建 1x1 隐藏窗口（音乐保活）
+bool MpvBackend::init(HWND videoHwnd, HWND parentHwnd) {
     // 1. 创建 mpv 实例
     mpv_ = mpv_create();
     if (!mpv_) return false;
@@ -28,75 +33,61 @@ bool MpvBackend::init(ID3D11Device* d3dDevice, ID3D11RenderTargetView* renderTar
     mpv_set_option_string(mpv_, "terminal", "no");
     mpv_set_option_string(mpv_, "msg-level", "all=warn");
 
-    // 3. 初始化 mpv
+    // 3. 视频输出嵌入窗口
+    if (videoHwnd == nullptr) {
+        // 纯音频模式：创建 1x1 隐藏子窗口保活
+        HINSTANCE hInst = (HINSTANCE)GetWindowLongPtrW(parentHwnd, GWLP_HINSTANCE);
+        static const wchar_t* kClass = L"MEPlayerHiddenMpv";
+        static bool registered = false;
+        if (!registered) {
+            WNDCLASSW wc = {};
+            wc.lpfnWndProc   = HiddenMpvWndProc;
+            wc.hInstance     = hInst;
+            wc.lpszClassName = kClass;
+            RegisterClassW(&wc);
+            registered = true;
+        }
+        video_hwnd_ = CreateWindowExW(0, kClass, L"", 0,
+                                      0, 0, 1, 1,
+                                      parentHwnd, nullptr, hInst, nullptr);
+        owns_hwnd_ = true;
+    } else {
+        video_hwnd_ = videoHwnd;
+        owns_hwnd_ = false;
+    }
+    parent_hwnd_ = parentHwnd;
+
+    // 设置 wid：把 mpv 视频输出嵌入到该窗口
+    // wid 在 Windows 上接受 HWND（以 int64_t 传递）
+    int64_t wid = (int64_t)(intptr_t)video_hwnd_;
+    mpv_set_option(mpv_, "wid", MPV_FORMAT_INT64, &wid);
+
+    // Windows 上推荐 vo=gpu（ANGLE/D3D11），由 mpv 自行创建渲染上下文
+    mpv_set_option_string(mpv_, "vo", "gpu");
+    // 不让 mpv 拦截鼠标/键盘事件（由宿主处理）
+    mpv_set_option_string(mpv_, "input-default-bindings", "no");
+    mpv_set_option_string(mpv_, "input-vo-keyboard", "no");
+    mpv_set_option_string(mpv_, "input-cursor", "no");
+    // 不显示 OSC（屏幕控制器），UI 由宿主绘制
+    mpv_set_option_string(mpv_, "osc", "no");
+    // 保持窗口尺寸由宿主控制
+    mpv_set_option_string(mpv_, "force-window", "no");
+
+    // 4. 初始化 mpv
     if (mpv_initialize(mpv_) < 0) {
         mpv_terminate_destroy(mpv_);
         mpv_ = nullptr;
+        if (owns_hwnd_ && video_hwnd_) {
+            DestroyWindow(video_hwnd_);
+            video_hwnd_ = nullptr;
+        }
         return false;
     }
 
-    // 4. 创建 D3D11 渲染上下文
-    ComPtr<ID3D11DeviceContext> ctx;
-    d3dDevice->GetImmediateContext(&ctx);
-
-    mpv_render_d3d11_device_params d3d_params = {};
-    d3d_params.device  = d3dDevice;
-    d3d_params.context = ctx.Get();
-
-    mpv_render_param create_params[] = {
-        {MPV_RENDER_PARAM_API_TYPE,                               const_cast<char*>(MPV_RENDER_API_TYPE_D3D11)},
-        {static_cast<mpv_render_param_type>(MPV_RENDER_PARAM_D3D11_DEVICE), &d3d_params},
-        {MPV_RENDER_PARAM_INVALID,                                nullptr},
-    };
-    if (mpv_render_context_create(&render_ctx_, mpv_, create_params) < 0) {
-        render_ctx_ = nullptr;
-        mpv_terminate_destroy(mpv_);
-        mpv_ = nullptr;
-        return false;
-    }
-
-    // 5. 设置渲染目标
-    if (renderTarget == nullptr) {
-        // 音乐播放器保活用：创建 1x1 隐藏纹理 + RTV
-        D3D11_TEXTURE2D_DESC tex_desc = {};
-        tex_desc.Width            = 1;
-        tex_desc.Height           = 1;
-        tex_desc.MipLevels        = 1;
-        tex_desc.ArraySize        = 1;
-        tex_desc.Format           = DXGI_FORMAT_B8G8R8A8_UNORM;
-        tex_desc.SampleDesc.Count = 1;
-        tex_desc.Usage            = D3D11_USAGE_DEFAULT;
-        tex_desc.BindFlags        = D3D11_BIND_RENDER_TARGET;
-
-        ComPtr<ID3D11Texture2D> tex;
-        if (FAILED(d3dDevice->CreateTexture2D(&tex_desc, nullptr, &tex))) {
-            mpv_render_context_free(render_ctx_);
-            render_ctx_ = nullptr;
-            mpv_terminate_destroy(mpv_);
-            mpv_ = nullptr;
-            return false;
-        }
-
-        D3D11_RENDER_TARGET_VIEW_DESC rtv_desc = {};
-        rtv_desc.Format         = tex_desc.Format;
-        rtv_desc.ViewDimension  = D3D11_RTV_DIMENSION_TEXTURE2D;
-
-        if (FAILED(d3dDevice->CreateRenderTargetView(tex.Get(), &rtv_desc, &hidden_rtv_))) {
-            mpv_render_context_free(render_ctx_);
-            render_ctx_ = nullptr;
-            mpv_terminate_destroy(mpv_);
-            mpv_ = nullptr;
-            return false;
-        }
-        target_rtv_ = hidden_rtv_.Get();
-    } else {
-        target_rtv_ = renderTarget;
-    }
-
-    // 6. 启动事件线程
+    // 5. 启动事件线程
     event_thread_ = std::thread(&MpvBackend::eventLoop, this);
 
-    // 7. 监听属性变化
+    // 6. 监听属性变化
     mpv_observe_property(mpv_, 0, "time-pos",         MPV_FORMAT_DOUBLE);
     mpv_observe_property(mpv_, 0, "duration",         MPV_FORMAT_DOUBLE);
     mpv_observe_property(mpv_, 0, "pause",            MPV_FORMAT_FLAG);
@@ -132,10 +123,12 @@ void MpvBackend::eventLoop() {
                     volume_.store(static_cast<int>(*static_cast<int64_t*>(prop->data)));
                 }
 
+                std::lock_guard<std::mutex> lk(cb_mutex_);
                 if (prop_cb_) prop_cb_(name);
                 break;
             }
             case MPV_EVENT_END_FILE: {
+                std::lock_guard<std::mutex> lk(cb_mutex_);
                 if (end_cb_) end_cb_();
                 break;
             }
@@ -225,25 +218,18 @@ void MpvBackend::stop() {
     mpv_command(mpv_, args);
 }
 
-// 渲染：将 mpv 当前帧绘制到绑定的 RTV
-void MpvBackend::render() {
-    if (!render_ctx_ || !target_rtv_) return;
-    ID3D11RenderTargetView* rtv = target_rtv_;
-    mpv_render_param params[] = {
-        {static_cast<mpv_render_param_type>(MPV_RENDER_PARAM_D3D11_RTV), &rtv},
-        {MPV_RENDER_PARAM_INVALID,                                        nullptr},
-    };
-    mpv_render_context_render(render_ctx_, params);
+// 调整嵌入子窗口尺寸
+void MpvBackend::resize(int width, int height) {
+    if (!video_hwnd_ || !owns_hwnd_) return;  // 自建隐藏窗口无需 resize
+    if (width < 1) width = 1;
+    if (height < 1) height = 1;
+    SetWindowPos(video_hwnd_, nullptr, 0, 0, width, height, SWP_NOMOVE | SWP_NOZORDER);
 }
 
-// 释放：置退出标志 -> 释放渲染上下文 -> 销毁 mpv -> join 线程
+// 释放：置退出标志 -> 销毁 mpv -> join 线程 -> 销毁隐藏窗口
 void MpvBackend::dispose() {
     if (exiting_.exchange(true)) return;  // 防止重复释放
 
-    if (render_ctx_) {
-        mpv_render_context_free(render_ctx_);
-        render_ctx_ = nullptr;
-    }
     if (mpv_) {
         mpv_terminate_destroy(mpv_);  // 会使 mpv_wait_event 返回 SHUTDOWN
         mpv_ = nullptr;
@@ -252,9 +238,12 @@ void MpvBackend::dispose() {
         event_thread_.join();
     }
 
-    hidden_rtv_.Reset();
-    target_rtv_ = nullptr;
-    d3d_device_ = nullptr;
+    if (owns_hwnd_ && video_hwnd_) {
+        DestroyWindow(video_hwnd_);
+        video_hwnd_ = nullptr;
+    }
+    owns_hwnd_ = false;
+    parent_hwnd_ = nullptr;
 }
 
 }  // namespace meplayer

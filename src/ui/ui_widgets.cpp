@@ -1274,76 +1274,66 @@ bool LyricsView::onMouseWheel(const MouseEvent& e) {
 }
 
 // ============================================================
-// VideoView（mpv 渲染挂载点）
+// VideoView（mpv wid 嵌入挂载点）
 // ============================================================
-Size VideoView::measure(const Size& max) { return {max.w, max.h}; }
-
-void VideoView::releaseResources() {
-    bitmap_.Reset();
-    rtv_.Reset();
-    tex_.Reset();
-    texW_ = texH_ = 0;
+// 子窗口过程：仅处理 WM_ERASEBKGND 返回 1（避免闪烁，mpv 自行绘制）
+static LRESULT CALLBACK MpvEmbedWndProc(HWND h, UINT msg, WPARAM w, LPARAM l) {
+    if (msg == WM_ERASEBKGND) return 1;
+    return DefWindowProcW(h, msg, w, l);
 }
 
-bool VideoView::ensureResources(float w, float h) {
-    if (w < 1 || h < 1) return false;
-    if (tex_ && std::fabs(texW_ - w) < 1.0f && std::fabs(texH_ - h) < 1.0f) return true;
-    auto* dev = WindowManager::instance().d3dDevice();
-    if (!dev) return false;
-    releaseResources();
-    D3D11_TEXTURE2D_DESC desc{};
-    desc.Width = static_cast<UINT>(w);
-    desc.Height = static_cast<UINT>(h);
-    desc.MipLevels = 1;
-    desc.ArraySize = 1;
-    desc.Format = DXGI_FORMAT_B8G8R8A8_UNORM;
-    desc.SampleDesc.Count = 1;
-    desc.Usage = D3D11_USAGE_DEFAULT;
-    desc.BindFlags = D3D11_BIND_RENDER_TARGET | D3D11_BIND_SHADER_RESOURCE;
-    desc.MiscFlags = D3D11_RESOURCE_MISC_SHARED;
-    HRESULT hr = dev->CreateTexture2D(&desc, nullptr, tex_.GetAddressOf());
-    if (FAILED(hr) || !tex_) return false;
-    hr = dev->CreateRenderTargetView(tex_.Get(), nullptr, rtv_.GetAddressOf());
-    if (FAILED(hr)) { releaseResources(); return false; }
-    texW_ = w; texH_ = h;
-    return true;
+VideoView::VideoView() = default;
+
+VideoView::~VideoView() {
+    releaseHwnd();
+}
+
+Size VideoView::measure(const Size& max) { return {max.w, max.h}; }
+
+void VideoView::ensureHwnd() {
+    if (hwnd_) return;
+    HWND parent = WindowManager::instance().hwnd();
+    HINSTANCE hInst = (HINSTANCE)GetWindowLongPtrW(parent, GWLP_HINSTANCE);
+    static const wchar_t* kClass = L"MEPlayerMpvEmbed";
+    static bool registered = false;
+    if (!registered) {
+        WNDCLASSW wc = {};
+        wc.lpfnWndProc   = MpvEmbedWndProc;
+        wc.hInstance     = hInst;
+        wc.hbrBackground = (HBRUSH)GetStockObject(BLACK_BRUSH);
+        wc.lpszClassName = kClass;
+        RegisterClassW(&wc);
+        registered = true;
+    }
+    hwnd_ = CreateWindowExW(0, kClass, L"",
+                            WS_CHILD | WS_VISIBLE | WS_CLIPSIBLINGS,
+                            0, 0, 1, 1,
+                            parent, nullptr, hInst, nullptr);
+}
+
+void VideoView::releaseHwnd() {
+    if (hwnd_) {
+        DestroyWindow(hwnd_);
+        hwnd_ = nullptr;
+    }
 }
 
 void VideoView::layout(const Rect& b) {
     bounds_ = b;
-    ensureResources(b.w, b.h);
+    ensureHwnd();
+    if (hwnd_) {
+        int x = static_cast<int>(b.x);
+        int y = static_cast<int>(b.y);
+        int w = static_cast<int>(b.w);
+        int h = static_cast<int>(b.h);
+        SetWindowPos(hwnd_, HWND_TOP, x, y, w, h, SWP_SHOWWINDOW);
+    }
 }
 
 void VideoView::draw(ID2D1RenderTarget* rt) {
-    // 黑色底
+    // wid 模式下视频由 mpv 直接绘制到子窗口，这里只画黑底兜底
+    // （子窗口已覆盖该区域，通常不会触发）
     rt->FillRectangle(bounds_.d2d(), BrushCache::get(rt, bgColor));
-    // mpv 渲染到自身纹理
-    if (backend && rtv_) {
-        backend->render();
-    }
-    // 将纹理贴到 D2D：需 D2D 1.1 设备上下文（ID2D1DeviceContext）。
-    // 当前 WindowManager 提供 D2D 1.0 HwndRenderTarget，QueryInterface 失败时仅显示黑底；
-    // 待后续接入 D2D 1.1 设备上下文即可自动启用视频贴图。
-    if (tex_) {
-        ComPtr<IDXGISurface> surface;
-        if (SUCCEEDED(tex_.As(&surface)) && surface) {
-            ComPtr<ID2D1DeviceContext> ctx;
-            if (SUCCEEDED(rt->QueryInterface(IID_PPV_ARGS(ctx.GetAddressOf()))) && ctx) {
-                if (!bitmap_) {
-                    D2D1_BITMAP_PROPERTIES props = D2D1::BitmapProperties(
-                        D2D1::PixelFormat(DXGI_FORMAT_B8G8R8A8_UNORM,
-                                          D2D1_ALPHA_MODE_PREMULTIPLIED),
-                        96, 96);
-                    ctx->CreateBitmapFromDxgiSurface(surface.Get(), &props,
-                                                     bitmap_.GetAddressOf());
-                }
-                if (bitmap_) {
-                    rt->DrawBitmap(bitmap_.Get(), bounds_.d2d(), 1.0f,
-                                   D2D1_BITMAP_INTERPOLATION_MODE_LINEAR);
-                }
-            }
-        }
-    }
 }
 
 Widget* VideoView::hitTest(float x, float y) {

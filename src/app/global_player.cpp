@@ -66,10 +66,10 @@ GlobalPlayer& GlobalPlayer::instance() {
 
 GlobalPlayer::GlobalPlayer() = default;
 
-// 预热：创建常驻 mpv（1x1 隐藏 RTV），绑定结束回调与音量
-bool GlobalPlayer::warmup(ID3D11Device* d3dDevice) {
+// 预热：创建常驻 mpv（纯音频，1x1 隐藏保活窗口），绑定结束回调与音量
+bool GlobalPlayer::warmup(HWND parentHwnd) {
     music_mpv_ = std::make_unique<MpvBackend>();
-    if (!music_mpv_->init(d3dDevice, nullptr)) {
+    if (!music_mpv_->init(nullptr, parentHwnd)) {
         music_mpv_.reset();
         return false;
     }
