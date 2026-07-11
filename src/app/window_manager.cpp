@@ -1,5 +1,6 @@
 #include "app/window_manager.h"
 #include "util/string_util.h"
+#include <windowsx.h>
 #pragma comment(lib, "d2d1.lib")
 #pragma comment(lib, "dwrite.lib")
 
@@ -189,6 +190,60 @@ LRESULT WindowManager::WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
         SetWindowPos(hwnd, nullptr, rc->left, rc->top,
             rc->right - rc->left, rc->bottom - rc->top,
             SWP_NOZORDER | SWP_NOACTIVATE);
+        return 0;
+    }
+    case WM_LBUTTONDOWN:
+    case WM_RBUTTONDOWN:
+    case WM_MBUTTONDOWN: {
+        SetCapture(hwnd);
+        MouseEvent e{};
+        e.x = static_cast<float>(GET_X_LPARAM(lp));
+        e.y = static_cast<float>(GET_Y_LPARAM(lp));
+        e.button = (msg == WM_LBUTTONDOWN) ? MouseBtn::Left
+                 : (msg == WM_RBUTTONDOWN) ? MouseBtn::Right : MouseBtn::Middle;
+        e.wheel = 0;
+        e.ctrl = (wp & MK_CONTROL) != 0;
+        e.shift = (wp & MK_SHIFT) != 0;
+        if (wm.mouse_down_cb_) wm.mouse_down_cb_(e);
+        return 0;
+    }
+    case WM_LBUTTONUP:
+    case WM_RBUTTONUP:
+    case WM_MBUTTONUP: {
+        ReleaseCapture();
+        MouseEvent e{};
+        e.x = static_cast<float>(GET_X_LPARAM(lp));
+        e.y = static_cast<float>(GET_Y_LPARAM(lp));
+        e.button = (msg == WM_LBUTTONUP) ? MouseBtn::Left
+                 : (msg == WM_RBUTTONUP) ? MouseBtn::Right : MouseBtn::Middle;
+        e.wheel = 0;
+        e.ctrl = (wp & MK_CONTROL) != 0;
+        e.shift = (wp & MK_SHIFT) != 0;
+        if (wm.mouse_up_cb_) wm.mouse_up_cb_(e);
+        return 0;
+    }
+    case WM_MOUSEMOVE: {
+        MouseEvent e{};
+        e.x = static_cast<float>(GET_X_LPARAM(lp));
+        e.y = static_cast<float>(GET_Y_LPARAM(lp));
+        e.button = MouseBtn::None;
+        e.wheel = 0;
+        e.ctrl = (wp & MK_CONTROL) != 0;
+        e.shift = (wp & MK_SHIFT) != 0;
+        if (wm.mouse_move_cb_) wm.mouse_move_cb_(e);
+        return 0;
+    }
+    case WM_MOUSEWHEEL: {
+        POINT pt{ GET_X_LPARAM(lp), GET_Y_LPARAM(lp) };
+        ScreenToClient(hwnd, &pt);
+        MouseEvent e{};
+        e.x = static_cast<float>(pt.x);
+        e.y = static_cast<float>(pt.y);
+        e.button = MouseBtn::None;
+        e.wheel = GET_WHEEL_DELTA_WPARAM(wp) / WHEEL_DELTA;
+        e.ctrl = (LOWORD(wp) & MK_CONTROL) != 0;
+        e.shift = (LOWORD(wp) & MK_SHIFT) != 0;
+        if (wm.mouse_wheel_cb_) wm.mouse_wheel_cb_(e);
         return 0;
     }
     }

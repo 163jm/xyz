@@ -85,8 +85,33 @@ public:
             render();
         });
 
+        // 10.1 鼠标事件回调：转发给当前活动页面（子页面优先于主页）
+        WindowManager::instance().setMouseDownCallback([this](const MouseEvent& e) {
+            Page* p = activePage();
+            if (p && p->onMouseDown(e)) WindowManager::instance().requestRedraw();
+        });
+        WindowManager::instance().setMouseUpCallback([this](const MouseEvent& e) {
+            Page* p = activePage();
+            if (p && p->onMouseUp(e)) WindowManager::instance().requestRedraw();
+        });
+        WindowManager::instance().setMouseMoveCallback([this](const MouseEvent& e) {
+            Page* p = activePage();
+            if (p && p->onMouseMove(e)) WindowManager::instance().requestRedraw();
+        });
+        WindowManager::instance().setMouseWheelCallback([this](const MouseEvent& e) {
+            Page* p = activePage();
+            if (p && p->onMouseWheel(e)) WindowManager::instance().requestRedraw();
+        });
+
         // 11. 显示窗口
         WindowManager::instance().show();
+    }
+
+    // 当前应接收输入事件/参与渲染的页面：子页面（视频/音乐播放页等）优先于主页
+    Page* activePage() {
+        if (currentPage_) return currentPage_.get();
+        if (homePage_) return homePage_.get();
+        return nullptr;
     }
 
     void render() {

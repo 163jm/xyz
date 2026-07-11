@@ -953,6 +953,22 @@ bool Scrollable::onMouseWheel(const MouseEvent& e) {
     return true;
 }
 
+bool Scrollable::onMouseDown(const MouseEvent& e) {
+    if (!child) return false;
+    auto* h = child->hitTest(e.x, e.y);
+    return h ? h->onMouseDown(e) : false;
+}
+bool Scrollable::onMouseUp(const MouseEvent& e) {
+    if (!child) return false;
+    auto* h = child->hitTest(e.x, e.y);
+    return h ? h->onMouseUp(e) : false;
+}
+bool Scrollable::onMouseMove(const MouseEvent& e) {
+    if (!child) return false;
+    auto* h = child->hitTest(e.x, e.y);
+    return h ? h->onMouseMove(e) : false;
+}
+
 // ============================================================
 // Scrollbar
 // ============================================================
@@ -1001,6 +1017,10 @@ Widget* ListView::hitTest(float x, float y) { return scroll_->hitTest(x, y); }
 bool ListView::onMouseWheel(const MouseEvent& e) {
     return scroll_->onMouseWheel(e);
 }
+
+bool ListView::onMouseDown(const MouseEvent& e) { return scroll_->onMouseDown(e); }
+bool ListView::onMouseUp(const MouseEvent& e) { return scroll_->onMouseUp(e); }
+bool ListView::onMouseMove(const MouseEvent& e) { return scroll_->onMouseMove(e); }
 
 // ============================================================
 // GridView
@@ -1056,6 +1076,10 @@ Widget* GridView::hitTest(float x, float y) { return scroll_->hitTest(x, y); }
 bool GridView::onMouseWheel(const MouseEvent& e) {
     return scroll_->onMouseWheel(e);
 }
+
+bool GridView::onMouseDown(const MouseEvent& e) { return scroll_->onMouseDown(e); }
+bool GridView::onMouseUp(const MouseEvent& e) { return scroll_->onMouseUp(e); }
+bool GridView::onMouseMove(const MouseEvent& e) { return scroll_->onMouseMove(e); }
 
 // ============================================================
 // DialogManager + Dialog

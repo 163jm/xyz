@@ -244,7 +244,7 @@ void VideoLibraryPage::rebuild() {
         clickArea->visible = false;  // 隐藏默认绘制
         auto overlay = std::make_shared<Stack>();
         overlay->addChild(card);
-        // overlay->addChild(clickArea);  // 不可见但接收事件
+        overlay->addChild(clickArea);  // 不可见但接收事件（需在 card 之后，作为顶层命中）
         return overlay;
     };
     contentCol->addChild(grid);

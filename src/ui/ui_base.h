@@ -108,6 +108,28 @@ public:
         if (!child) return nullptr;
         return child->hitTest(x, y);
     }
+
+    // 事件转发：容器自身不处理，交给命中的子控件
+    bool onMouseDown(const MouseEvent& e) override {
+        if (!child) return false;
+        auto* h = child->hitTest(e.x, e.y);
+        return h ? h->onMouseDown(e) : false;
+    }
+    bool onMouseUp(const MouseEvent& e) override {
+        if (!child) return false;
+        auto* h = child->hitTest(e.x, e.y);
+        return h ? h->onMouseUp(e) : false;
+    }
+    bool onMouseMove(const MouseEvent& e) override {
+        if (!child) return false;
+        auto* h = child->hitTest(e.x, e.y);
+        return h ? h->onMouseMove(e) : false;
+    }
+    bool onMouseWheel(const MouseEvent& e) override {
+        if (!child) return false;
+        auto* h = child->hitTest(e.x, e.y);
+        return h ? h->onMouseWheel(e) : false;
+    }
 };
 
 // ---- 多子节点容器 ----
@@ -117,8 +139,9 @@ public:
     void addChild(WidgetPtr c) { children.push_back(std::move(c)); }
 
     Widget* hitTest(float x, float y) override {
-        // 从后往前（顶层优先）
+        // 从后往前（顶层优先），跳过不可见子项
         for (int i = static_cast<int>(children.size())-1; i >= 0; i--) {
+            if (!children[i]->visible) continue;
             auto* h = children[i]->hitTest(x, y);
             if (h) return h;
         }
@@ -126,6 +149,24 @@ public:
     }
     void draw(ID2D1RenderTarget* rt) override {
         for (auto& c : children) if (c->visible) c->draw(rt);
+    }
+
+    // 事件转发：容器自身不处理，交给命中的子控件（从后往前，顶层优先）
+    bool onMouseDown(const MouseEvent& e) override {
+        auto* h = hitTest(e.x, e.y);
+        return h ? h->onMouseDown(e) : false;
+    }
+    bool onMouseUp(const MouseEvent& e) override {
+        auto* h = hitTest(e.x, e.y);
+        return h ? h->onMouseUp(e) : false;
+    }
+    bool onMouseMove(const MouseEvent& e) override {
+        auto* h = hitTest(e.x, e.y);
+        return h ? h->onMouseMove(e) : false;
+    }
+    bool onMouseWheel(const MouseEvent& e) override {
+        auto* h = hitTest(e.x, e.y);
+        return h ? h->onMouseWheel(e) : false;
     }
 };
 

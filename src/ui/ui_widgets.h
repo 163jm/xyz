@@ -378,6 +378,9 @@ public:
     void draw(ID2D1RenderTarget* rt) override;
     Widget* hitTest(float x, float y) override;
     bool onMouseWheel(const MouseEvent& e) override;
+    bool onMouseDown(const MouseEvent& e) override;
+    bool onMouseUp(const MouseEvent& e) override;
+    bool onMouseMove(const MouseEvent& e) override;
 private:
     float contentHeight_ = 0;
     float viewportHeight_ = 0;
@@ -416,6 +419,9 @@ public:
     void draw(ID2D1RenderTarget* rt) override;
     Widget* hitTest(float x, float y) override;
     bool onMouseWheel(const MouseEvent& e) override;
+    bool onMouseDown(const MouseEvent& e) override;
+    bool onMouseUp(const MouseEvent& e) override;
+    bool onMouseMove(const MouseEvent& e) override;
 private:
     std::shared_ptr<Scrollable> scroll_;
     int builtCount_ = -1;
@@ -439,6 +445,9 @@ public:
     void draw(ID2D1RenderTarget* rt) override;
     Widget* hitTest(float x, float y) override;
     bool onMouseWheel(const MouseEvent& e) override;
+    bool onMouseDown(const MouseEvent& e) override;
+    bool onMouseUp(const MouseEvent& e) override;
+    bool onMouseMove(const MouseEvent& e) override;
 private:
     std::shared_ptr<Scrollable> scroll_;
     int builtCount_ = -1;

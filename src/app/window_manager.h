@@ -9,6 +9,7 @@
 #include <functional>
 #include <string>
 #include <memory>
+#include "ui/ui_base.h"  // MouseEvent
 
 namespace meplayer {
 
@@ -54,6 +55,14 @@ public:
     void setRenderCallback(RenderCb cb) { render_cb_ = cb; }
     void requestRedraw() { InvalidateRect(hwnd_, nullptr, FALSE); }
 
+    // 鼠标事件回调（由 App 层设置，转发给当前页面）
+    // 坐标为客户区像素坐标（与 UI 布局坐标系一致）
+    using MouseCb = std::function<void(const MouseEvent&)>;
+    void setMouseDownCallback(MouseCb cb)  { mouse_down_cb_ = std::move(cb); }
+    void setMouseUpCallback(MouseCb cb)    { mouse_up_cb_ = std::move(cb); }
+    void setMouseMoveCallback(MouseCb cb)  { mouse_move_cb_ = std::move(cb); }
+    void setMouseWheelCallback(MouseCb cb) { mouse_wheel_cb_ = std::move(cb); }
+
     // 窗口尺寸
     int width() const { return width_; }
     int height() const { return height_; }
@@ -85,6 +94,10 @@ private:
     ComPtr<ID3D11DeviceContext>   d3d_context_;
     ComPtr<IDXGISwapChain>        swapchain_;
     RenderCb                      render_cb_;
+    MouseCb                       mouse_down_cb_;
+    MouseCb                       mouse_up_cb_;
+    MouseCb                       mouse_move_cb_;
+    MouseCb                       mouse_wheel_cb_;
 };
 
 }  // namespace meplayer
