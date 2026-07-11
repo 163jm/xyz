@@ -32,13 +32,36 @@ find_package(SQLite3 REQUIRED)
 find_package(CURL REQUIRED)
 
 # mpv：third_party/mpv/ 下放置 mpv.lib / mpv-2.dll / include/mpv/*.h
-# 用户自行解压 mpv-dev-x86_64 到此目录
+# 用户自行解压 mpv-dev-x86_64 到此目录。
+# 注意：shinchiro 的 mpv-dev 包不含 MSVC 的 mpv.lib，只有 mpv.def。
+# 下面自动检测：若 mpv.lib 不存在但 mpv.def 存在，用 MSVC lib.exe 生成。
 set(MPV_ROOT "${CMAKE_SOURCE_DIR}/third_party/mpv")
 if(NOT EXISTS "${MPV_ROOT}/include/mpv/client.h")
     message(WARNING
         "third_party/mpv/include/mpv/client.h 未找到。\n"
         "请将 mpv-dev-x86_64-*.7z 解压到 third_party/mpv/，"
-        "确保 third_party/mpv/include/mpv/client.h、mpv.lib、mpv-2.dll 存在。")
+        "确保 third_party/mpv/include/mpv/client.h、mpv-2.dll、mpv.def 存在。")
+endif()
+
+# 若缺 mpv.lib 但有 mpv.def，自动用 lib.exe 生成（需 MSVC 环境）
+if(NOT EXISTS "${MPV_ROOT}/mpv.lib" AND EXISTS "${MPV_ROOT}/mpv.def")
+    message(STATUS "mpv.lib 不存在，从 mpv.def 生成...")
+    execute_process(
+        COMMAND lib /def:${MPV_ROOT}/mpv.def /name:mpv-2.dll
+                /out:${MPV_ROOT}/mpv.lib /MACHINE:X64
+        RESULT_VARIABLE _lib_result
+        OUTPUT_VARIABLE _lib_out
+        ERROR_VARIABLE _lib_err
+    )
+    if(NOT _lib_result EQUAL 0)
+        message(WARNING "从 mpv.def 生成 mpv.lib 失败（可能未在 MSVC 开发者命令提示符下运行）。\n"
+                        "请手动在「x64 Native Tools Command Prompt」中执行：\n"
+                        "  cd third_party\\mpv\n"
+                        "  lib /def:mpv.def /name:mpv-2.dll /out:mpv.lib /MACHINE:X64\n"
+                        "错误: ${_lib_err}")
+    else()
+        message(STATUS "mpv.lib 生成成功")
+    endif()
 endif()
 
 # ---- 资源 ----
