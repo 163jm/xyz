@@ -113,6 +113,31 @@ jobs:
           Get-ChildItem | Select-Object Name, Length
           Pop-Location
 
+      - name: Update vcpkg baseline
+        shell: pwsh
+        run: |
+          # VS 内置 vcpkg 要求 manifest 指定 builtin-baseline，且 SHA 必须与
+          # vcpkg 仓库实际 HEAD 匹配（否则版本解析失败）。
+          # 动态读取 vcpkg 仓库的 HEAD SHA，更新 vcpkg.json。
+          $vcpkgDir = $env:VCPKG_ROOT
+          if (-not $vcpkgDir) { $vcpkgDir = "C:/Program Files/Microsoft Visual Studio/18/Enterprise/VC/vcpkg" }
+          $sha = & git -C $vcpkgDir rev-parse HEAD 2>$null
+          if (-not $sha) {
+            # 退化：读取 .git/refs/heads/master
+            $refFile = Join-Path $vcpkgDir ".git/refs/heads/master"
+            if (Test-Path $refFile) { $sha = (Get-Content $refFile -Raw).Trim() }
+          }
+          if (-not $sha) {
+            Write-Host "警告: 无法获取 vcpkg HEAD SHA，保留 vcpkg.json 中的硬编码 baseline"
+          } else {
+            Write-Host "vcpkg HEAD SHA: $sha"
+            $json = Get-Content vcpkg.json -Raw | ConvertFrom-Json
+            $json."builtin-baseline" = $sha
+            $json | ConvertTo-Json -Depth 10 | Set-Content vcpkg.json -Encoding UTF8
+            Write-Host "===== 更新后的 vcpkg.json ====="
+            Get-Content vcpkg.json
+          }
+
       - name: Configure CMake
         shell: pwsh
         run: |
