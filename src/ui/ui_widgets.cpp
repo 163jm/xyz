@@ -1373,6 +1373,9 @@ Widget* VideoView::hitTest(float x, float y) {
 // MiniPlayerBar
 // ============================================================
 Size MiniPlayerBar::measure(const Size& max) {
+    // kind == None 表示当前没有任何播放中的媒体，不应占用底部空间/画出空背景条，
+    // 否则会在窗口底部出现一条内容为空的灰色条带。
+    if (kind == MiniBarKind::None) return {max.w, 0};
     return {max.w, std::min(64.0f, max.h > 0 ? max.h : 64.0f)};
 }
 
@@ -1393,6 +1396,7 @@ void MiniPlayerBar::layout(const Rect& b) {
 }
 
 void MiniPlayerBar::draw(ID2D1RenderTarget* rt) {
+    if (kind == MiniBarKind::None || bounds_.h <= 0) return;
     auto& sc = ThemeManager::instance().current();
     // 背景
     fillRoundedRect(rt, bounds_.d2d(), 0, sc.surface);

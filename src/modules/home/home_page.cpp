@@ -24,22 +24,29 @@ HomePage::HomePage() {
     rail_->onChanged = [this](int idx) {
         if (idx == current_) return;
         pages_[current_]->onInactive();
+        pages_[current_]->visible = false;
         current_ = idx;
         rail_->selectedIndex = idx;
+        pages_[current_]->visible = true;
         pages_[current_]->onActive();
         requestRedraw();
     };
 
     // 底部迷你播放栏
     miniBar_ = std::make_shared<MiniPlayerBar>();
+    miniBar_->kind = GlobalPlayer::instance().miniBarKind();
     miniBar_->onClick = [this]() {
         // 根据当前 miniBarKind 跳转对应播放页（由上层 App 处理）
         // 这里暂不实现跳转，仅刷新
         requestRedraw();
     };
 
-    // 全局播放器状态变化时刷新（音乐播放进度等）
+    // 全局播放器状态变化时刷新（音乐播放进度等），并同步迷你播放栏应显示的类型
+    // 之前这里只 requestRedraw()，从未更新 miniBar_->kind，导致底部迷你播放栏
+    // 一直停留在初始值 MiniBarKind::None：既不会在有播放时正确显示，
+    // 也会因 measure/draw 未对 None 做特殊处理而画出一条空的灰色背景条。
     GlobalPlayer::instance().addChangedCb([this]() {
+        miniBar_->setKind(GlobalPlayer::instance().miniBarKind());
         requestRedraw();
     });
 

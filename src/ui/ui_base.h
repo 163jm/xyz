@@ -287,11 +287,22 @@ public:
 };
 
 // ---- Stack（层叠）----
+// 命中测试只考虑当前可见的子项：IndexedStack 场景下（如 HomePage 的 4 个页面
+// 叠在同一 Stack 里，用 visible 切换显示哪个）若不过滤 invisible 子项，
+// 隐藏的页面依然会参与 hitTest，可能抢先命中并拦截本该发给可见页面的点击/悬停事件。
 class Stack : public MultiChildWidget {
 public:
     void layout(const Rect& b) override {
         bounds_ = b;
         for (auto& c : children) c->layout(b);
+    }
+    Widget* hitTest(float x, float y) override {
+        for (int i = static_cast<int>(children.size()) - 1; i >= 0; i--) {
+            if (!children[i]->visible || !children[i]->interactive) continue;
+            auto* h = children[i]->hitTest(x, y);
+            if (h) return h;
+        }
+        return nullptr;
     }
 };
 
