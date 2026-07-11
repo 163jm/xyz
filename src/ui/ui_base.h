@@ -81,8 +81,11 @@ public:
 
     // 标记需要重绘
     void markDirty();
-    // 是否可见
+    // 是否可见（控制绘制）
     bool visible = true;
+    // 是否参与交互（控制命中测试），默认跟随visible
+    // 设为true可使invisible控件仍接收事件（用于透明点击层）
+    bool interactive = true;
     // 是否参与布局测量
     bool needsLayout = true;
 };
@@ -139,9 +142,9 @@ public:
     void addChild(WidgetPtr c) { children.push_back(std::move(c)); }
 
     Widget* hitTest(float x, float y) override {
-        // 从后往前（顶层优先），跳过不可见子项
+        // 从后往前（顶层优先），跳过非交互子项
         for (int i = static_cast<int>(children.size())-1; i >= 0; i--) {
-            if (!children[i]->visible) continue;
+            if (!children[i]->interactive) continue;
             auto* h = children[i]->hitTest(x, y);
             if (h) return h;
         }
