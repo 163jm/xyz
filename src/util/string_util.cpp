@@ -3,6 +3,7 @@
 #include <sstream>
 #include <cstdarg>
 #include <cstdio>
+#include <windows.h>
 
 namespace meplayer {
 

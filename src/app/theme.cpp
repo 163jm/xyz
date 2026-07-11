@@ -1,5 +1,6 @@
 #include "app/theme.h"
 #include <algorithm>
+#include <cmath>
 
 namespace meplayer {
 

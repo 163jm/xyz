@@ -89,7 +89,7 @@ std::string VideoThumbnail::generate(const std::string& videoPath, int size) {
 
     // 启用缩略图生成模式（解码器跳过 B/P 帧，加速）
     ComPtr<IUnknown> unk;
-    reader->GetServiceForStream(MF_SOURCE_READER_FIRST_VIDEO_STREAM,
+    reader->GetServiceForStream(MF_SOURCE_READER_FIRST_VIDEO_STREAM, GUID_NULL,
                                 IID_PPV_ARGS(unk.GetAddressOf()));
     if (unk) {
         ComPtr<ICodecAPI> codec;

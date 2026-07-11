@@ -12,8 +12,10 @@ void Widget::markDirty() {
 // ---- Flex measure/layout ----
 Size Flex::measure(const Size& max) {
     bool horiz = direction == Axis::Horizontal;
-    float mainMax = horiz ? max.w : max.h;
-    float crossMax = horiz ? max.h : max.w;
+    float innerMaxW = std::max(0.0f, max.w - padding.l - padding.r);
+    float innerMaxH = std::max(0.0f, max.h - padding.t - padding.b);
+    float mainMax = horiz ? innerMaxW : innerMaxH;
+    float crossMax = horiz ? innerMaxH : innerMaxW;
 
     // 计算 flex 总和和非 flex 子项占用
     float flexSum = 0, usedMain = 0, maxCross = 0;
@@ -26,7 +28,7 @@ Size Flex::measure(const Size& max) {
             flexSum += f;
             sizes[i] = {0,0};
         } else {
-            Size s = children[i]->measure({horiz ? max.w : max.w, horiz ? max.h : max.h});
+            Size s = children[i]->measure({horiz ? innerMaxW : innerMaxW, horiz ? innerMaxH : innerMaxH});
             if (horiz) usedMain += s.w;
             else       usedMain += s.h;
             float c = horiz ? s.h : s.w;
@@ -49,14 +51,18 @@ Size Flex::measure(const Size& max) {
     }
     float mainTotal = usedMain;
     if (flexSum > 0) mainTotal = mainMax;  // flex 填满
-    return horiz ? Size{mainTotal, maxCross} : Size{maxCross, mainTotal};
+    Size inner = horiz ? Size{mainTotal, maxCross} : Size{maxCross, mainTotal};
+    return { inner.w + padding.l + padding.r, inner.h + padding.t + padding.b };
 }
 
 void Flex::layout(const Rect& b) {
     bounds_ = b;
     bool horiz = direction == Axis::Horizontal;
-    float mainSize = horiz ? b.w : b.h;
-    float crossSize = horiz ? b.h : b.w;
+    Rect inner{ b.x + padding.l, b.y + padding.t,
+                std::max(0.0f, b.w - padding.l - padding.r),
+                std::max(0.0f, b.h - padding.t - padding.b) };
+    float mainSize = horiz ? inner.w : inner.h;
+    float crossSize = horiz ? inner.h : inner.w;
 
     // 先 measure 所有子项拿到尺寸
     std::vector<Size> sizes(children.size());
@@ -132,10 +138,10 @@ void Flex::layout(const Rect& b) {
         }
         Rect r;
         if (horiz) {
-            r = {b.x + pos, b.y + cross, s.w, s.h};
+            r = {inner.x + pos, inner.y + cross, s.w, s.h};
             pos += s.w + stepSpacing;
         } else {
-            r = {b.x + cross, b.y + pos, s.w, s.h};
+            r = {inner.x + cross, inner.y + pos, s.w, s.h};
             pos += s.h + stepSpacing;
         }
         children[i]->layout(r);
@@ -151,7 +157,7 @@ void ClipRRect::draw(ID2D1RenderTarget* rt) {
         bounds_.d2d(),
         nullptr, D2D1_ANTIALIAS_MODE_PER_PRIMITIVE,
         D2D1::IdentityMatrix(),
-        1.0f, layer.Get(),
+        1.0f, nullptr,
         D2D1_LAYER_OPTIONS_NONE);
     ComPtr<ID2D1PathGeometry> geo;
     WindowManager::instance().d2dFactory()->CreatePathGeometry(geo.GetAddressOf());
@@ -165,7 +171,7 @@ void ClipRRect::draw(ID2D1RenderTarget* rt) {
         D2D1::SizeF(radius, radius), 90, D2D1_SWEEP_DIRECTION_CLOCKWISE, D2D1_ARC_SIZE_SMALL));
     sink->AddArc(D2D1::ArcSegment(D2D1::Point2F(r.left, r.bottom),
         D2D1::SizeF(radius, radius), 90, D2D1_SWEEP_DIRECTION_CLOCKWISE, D2D1_ARC_SIZE_SMALL));
-    sink->AddArc(D2D1::Point2F(r.left, r.top),
+    sink->AddArc(D2D1::ArcSegment(D2D1::Point2F(r.left, r.top),
         D2D1::SizeF(radius, radius), 90, D2D1_SWEEP_DIRECTION_CLOCKWISE, D2D1_ARC_SIZE_SMALL));
     sink->EndFigure(D2D1_FIGURE_END_CLOSED);
     sink->Close();

@@ -1,4 +1,5 @@
 #include "core/storage.h"
+#include "util/string_util.h"
 #include <ctime>
 
 namespace meplayer {

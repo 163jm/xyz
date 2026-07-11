@@ -33,6 +33,7 @@ void VideoPlayerPage::onActive() {
     GlobalPlayer::instance().stopMusicForOtherPlayback();
 
     // 确保 VideoView 子窗口已创建（wid 嵌入目标）
+    if (needsRebuild_) rebuild();
     if (video_) video_->ensureHwnd();
     HWND videoHwnd = video_ ? video_->hwnd() : nullptr;
 
@@ -129,7 +130,6 @@ void VideoPlayerPage::reportStateToGlobal() {
     snap.duration = backend_->duration();
     snap.playlist = playlist_;
     snap.startIndex = currentIndex_;
-    snap.resumePosition = backend_->position();
     GlobalPlayer::instance().saveVideoSnapshot(snap);
 }
 
@@ -193,6 +193,7 @@ void VideoPlayerPage::rebuild() {
     // VideoView 绑定 backend
     auto videoView = std::make_shared<VideoView>();
     videoView->backend = backend_.get();
+    video_ = videoView;
     videoArea->addChild(videoView);
 
     // 控制栏（悬停显隐，简化为始终显示）

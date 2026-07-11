@@ -27,9 +27,11 @@ std::vector<ScannedFile> scan_dir(const std::wstring& root,
                                   int max_depth) {
     std::vector<ScannedFile> out;
     std::error_code ec;
-    for (auto& p : fs::recursive_directory_iterator(root, fs::directory_options::skip_permission_denied, ec)) {
+    for (auto it = fs::recursive_directory_iterator(root, fs::directory_options::skip_permission_denied, ec);
+         it != fs::recursive_directory_iterator(); it.increment(ec)) {
         if (ec) break;
-        if (p.depth() > max_depth) continue;
+        auto& p = *it;
+        if (it.depth() > max_depth) continue;
         if (!p.is_regular_file()) continue;
         auto& path = p.path();
         // 跳过隐藏目录

@@ -28,4 +28,21 @@ bool        has_ext(const std::wstring& path, const std::vector<std::wstring>& e
 // 格式化
 std::string format_time(double seconds);                 // "mm:ss" 或 "h:mm:ss"
 
+// 调用方普遍以 util:: 前缀引用本文件中的自由函数（历史遗留），
+// 这里提供命名空间别名以保持源码兼容，避免逐处修改调用点。
+namespace util {
+using meplayer::utf8_to_wide;
+using meplayer::wide_to_utf8;
+using meplayer::split;
+using meplayer::wsplit;
+using meplayer::trim;
+using meplayer::wtrim;
+using meplayer::base_name;
+using meplayer::dir_name;
+using meplayer::ext_of;
+using meplayer::no_ext;
+using meplayer::has_ext;
+using meplayer::format_time;
+}  // namespace util
+
 }  // namespace meplayer

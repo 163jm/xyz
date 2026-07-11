@@ -123,6 +123,7 @@ private:
     MiniBarKind  mini_kind_ = MiniBarKind::None;
     VideoSnapshot video_snap_;
     IptvSnapshot  iptv_snap_;
+    std::vector<std::wstring> channel_groups_;
 
     std::vector<ChangedCb> cbs_;
     std::mutex mtx_;

@@ -3,6 +3,7 @@
 #pragma once
 #include "modules/page.h"
 #include "core/mpv_backend.h"
+#include "ui/ui_widgets.h"
 #include <memory>
 #include <vector>
 #include <string>
@@ -48,6 +49,7 @@ private:
     std::unique_ptr<MpvBackend> backend_;
     std::vector<std::string> playlist_;
     int currentIndex_ = 0;
+    std::shared_ptr<VideoView> video_;
 
     bool controlsVisible_ = true;
     bool fullscreen_ = false;

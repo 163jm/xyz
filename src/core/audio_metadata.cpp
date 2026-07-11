@@ -69,7 +69,7 @@ static std::vector<uint8_t> readId3v2Picture(TagLib::ID3v2::Tag* tag) {
     if (frames.isEmpty()) return {};
     auto* frame = dynamic_cast<TagLib::ID3v2::AttachedPictureFrame*>(frames.front());
     if (!frame) return {};
-    auto& data = frame->picture();
+    const auto data = frame->picture();
     return std::vector<uint8_t>(data.data(), data.data() + data.size());
 }
 
@@ -86,11 +86,11 @@ static std::string readId3v2Lyrics(TagLib::ID3v2::Tag* tag) {
 // ---- FLAC 封面 ----
 static std::vector<uint8_t> readFlacPicture(TagLib::FLAC::File* file) {
     if (!file) return {};
-    auto& list = file->pictureList();
+    const auto list = file->pictureList();
     if (list.isEmpty()) return {};
     auto* pic = list.front();
     if (!pic) return {};
-    auto& data = pic->data();
+    const auto data = pic->data();
     return std::vector<uint8_t>(data.data(), data.data() + data.size());
 }
 
@@ -165,7 +165,7 @@ AudioMetadata AudioMetadataReader::readFile(const std::string& filePath) {
                 auto data = cov.toCoverArtList();
                 if (!data.isEmpty()) {
                     auto& pic = data.front();
-                    auto& bytes = pic.data();
+                    const auto bytes = pic.data();
                     m.coverBytes.assign(bytes.data(), bytes.data() + bytes.size());
                 }
             }
@@ -223,7 +223,7 @@ std::vector<uint8_t> AudioMetadataReader::readPicture(const std::string& filePat
                 auto data = cov.toCoverArtList();
                 if (!data.isEmpty()) {
                     auto& pic = data.front();
-                    auto& bytes = pic.data();
+                    const auto bytes = pic.data();
                     return std::vector<uint8_t>(bytes.data(), bytes.data() + bytes.size());
                 }
             }

@@ -125,16 +125,16 @@ public:
         title = L"编辑 IPTV 源";
         if (existing) {
             editing_ = *existing;
-            nameField_.text = utf8_to_wide(existing->name);
+            nameField_->text = utf8_to_wide(existing->name);
             type_ = existing->type;            // "remote" | "file"
-            urlField_.text = utf8_to_wide(existing->type == "remote"
+            urlField_->text = utf8_to_wide(existing->type == "remote"
                                          ? existing->url : existing->filePath);
             autoUpdate_ = existing->autoUpdate;
         } else {
             type_ = "remote";
             autoUpdate_ = false;
         }
-        urlField_.placeholder = (type_ == "remote")
+        urlField_->placeholder = (type_ == "remote")
             ? L"http(s)://.../xxx.m3u" : L"点击右侧按钮选择文件";
         buildContent();
     }
@@ -176,14 +176,14 @@ private:
         typeRow->addChild(typeLabelValue_);
         auto btnRemote = std::make_shared<TextButton>(L"远程", [this]{
             type_ = "remote";
-            urlField_.placeholder = L"http(s)://.../xxx.m3u";
+            urlField_->placeholder = L"http(s)://.../xxx.m3u";
             urlField_->text.clear();
             typeLabelValue_->setText(L"远程");
             markDirty();
         });
         auto btnFile = std::make_shared<TextButton>(L"文件", [this]{
             type_ = "file";
-            urlField_.placeholder = L"点击右侧按钮选择文件";
+            urlField_->placeholder = L"点击右侧按钮选择文件";
             typeLabelValue_->setText(L"文件");
             markDirty();
         });

@@ -3,12 +3,14 @@
 #include "app/theme.h"
 #include "app/window_manager.h"
 #include "app/global_player.h"
+#include "core/storage.h"
 #include "util/string_util.h"
 
 #include <shobjidl.h>          // IFileOpenDialog（选择文件夹）
 #include <wincodec.h>
 #include <algorithm>
 #include <cctype>
+#include <cwctype>
 #include <sstream>
 
 namespace meplayer {

@@ -189,6 +189,7 @@ public:
     MainAxisAlignment mainAlign = MainAxisAlignment::Start;
     CrossAxisAlignment crossAlign = CrossAxisAlignment::Center;
     float spacing = 0;
+    EdgeInsets padding;
     // Expanded 子项的 flex 比例（按索引）
     std::map<int, float> flex;
 

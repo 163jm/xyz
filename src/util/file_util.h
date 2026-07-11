@@ -34,4 +34,17 @@ std::wstring join(const std::wstring& a, const std::wstring& b);
 // 读取整个文件为字节
 std::vector<uint8_t> read_all_bytes(const std::wstring& path);
 
+// 调用方普遍以 util:: 前缀引用本文件中的自由函数（历史遗留），
+// 这里提供命名空间别名以保持源码兼容，避免逐处修改调用点。
+namespace util {
+using meplayer::ScannedFile;
+using meplayer::file_exists;
+using meplayer::dir_exists;
+using meplayer::create_dirs;
+using meplayer::scan_dir;
+using meplayer::exe_dir;
+using meplayer::join;
+using meplayer::read_all_bytes;
+}  // namespace util
+
 }  // namespace meplayer
