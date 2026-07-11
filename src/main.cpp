@@ -3,7 +3,9 @@
 // 对应原项目 Flutter Windows 端 main.dart 的启动流程
 #include <windows.h>
 #include <objbase.h>
+#include <shellscalingapi.h>
 #include <memory>
+#pragma comment(lib, "shcore.lib")
 
 #include "app/window_manager.h"
 #include "app/tray_service.h"
@@ -172,6 +174,26 @@ private:
 
 // ---- WinMain ----
 int WINAPI wWinMain(HINSTANCE hInst, HINSTANCE, LPWSTR, int) {
+    // 声明进程为 Per-Monitor-V2 DPI 感知。
+    // 若不声明，Windows 会对整个窗口做位图缩放：
+    // - 界面被整体缩放/挤到左上角一小块区域（视觉错位）
+    // - 鼠标消息坐标是"虚拟化"坐标，与实际渲染坐标不一致，导致点击无响应或点错位置
+    // 必须在创建任何窗口之前调用。
+    HMODULE hUser32 = GetModuleHandleW(L"user32.dll");
+    typedef BOOL(WINAPI* SetCtxFn)(DPI_AWARENESS_CONTEXT);
+    bool dpiSet = false;
+    if (hUser32) {
+        auto setCtx = reinterpret_cast<SetCtxFn>(
+            GetProcAddress(hUser32, "SetProcessDpiAwarenessContext"));
+        if (setCtx) {
+            dpiSet = setCtx(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2) != FALSE;
+        }
+    }
+    if (!dpiSet) {
+        // 回退：Windows 8.1+ Per-Monitor DPI 感知
+        SetProcessDpiAwareness(PROCESS_PER_MONITOR_DPI_AWARE);
+    }
+
     auto& app = meplayer::App::instance();
     app.init(hInst);
     app.run();

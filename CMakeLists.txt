@@ -124,6 +124,7 @@ target_link_libraries(MEPlayer PRIVATE
     winmm
     winhttp         # IPTV M3U 下载
     comdlg32        # GetOpenFileName 文件选择
+    shcore          # SetProcessDpiAwarenessContext / SetProcessDpiAwareness（DPI 感知）
 )
 
 # ---- 拷贝 mpv dll 到输出目录（shinchiro 的 dll 名为 libmpv-2.dll）----

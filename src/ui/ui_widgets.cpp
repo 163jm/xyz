@@ -652,10 +652,10 @@ Size NavigationRail::measure(const Size& max) {
 
 void NavigationRail::layout(const Rect& b) { bounds_ = b; }
 
+// y 为相对本控件左上角的坐标（调用方需已减去 bounds_.y，不要再传绝对坐标）
 int NavigationRail::itemAt(float y) const {
-    float yy = y - bounds_.y;
-    if (yy < 0) return -1;
-    int idx = static_cast<int>(yy / itemHeight);
+    if (y < 0) return -1;
+    int idx = static_cast<int>(y / itemHeight);
     if (idx < 0 || idx >= static_cast<int>(items.size())) return -1;
     return idx;
 }
@@ -691,13 +691,18 @@ void NavigationRail::draw(ID2D1RenderTarget* rt) {
 }
 
 Widget* NavigationRail::hitTest(float x, float y) {
+    // hitTest 接收的是绝对坐标（与 bounds_ 同一坐标系），需先转换为相对坐标再传给 itemAt
     if (!pointInRect(x, y, bounds_.d2d())) return nullptr;
-    if (itemAt(y) < 0) return nullptr;
+    if (itemAt(y - bounds_.y) < 0) return nullptr;
     return this;
 }
 
 bool NavigationRail::onMouseDown(const MouseEvent& e) {
-    int idx = itemAt(e.y + bounds_.y);
+    // e.y 已经是相对本控件左上角的坐标（事件分发时已减去 bounds_.y），
+    // itemAt() 内部又会再减一次 bounds_.y，此前这里额外加上 bounds_.y
+    // 导致坐标被错误地转换回"绝对坐标 + bounds_.y"，使命中计算整体偏移，
+    // 点击导航项经常判定到错误的 item（或越界返回 -1 无响应）。
+    int idx = itemAt(e.y);
     if (idx >= 0 && idx != selectedIndex) {
         selectedIndex = idx;
         if (onChanged) onChanged(idx);
@@ -707,7 +712,7 @@ bool NavigationRail::onMouseDown(const MouseEvent& e) {
 }
 bool NavigationRail::onMouseMove(const MouseEvent& e) {
     handleHover();
-    int idx = itemAt(e.y + bounds_.y);
+    int idx = itemAt(e.y);
     if (idx != hoveredIndex_) { hoveredIndex_ = idx; markDirty(); }
     return true;
 }
