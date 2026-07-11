@@ -119,12 +119,17 @@ jobs:
       - name: Configure CMake
         shell: pwsh
         run: |
+          $toolchain = "$env:VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake"
+          if (-not (Test-Path $toolchain)) {
+            throw "vcpkg toolchain 未找到: $toolchain`nVCPKG_ROOT=$env:VCPKG_ROOT"
+          }
           cmake -B build -S . `
-            -DCMAKE_BUILD_TYPE=$env:BUILD_TYPE `
-            -DCMAKE_TOOLCHAIN_FILE=$env:VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake `
+            -DCMAKE_BUILD_TYPE="$env:BUILD_TYPE" `
+            -DCMAKE_TOOLCHAIN_FILE="$toolchain" `
             -DVCPKG_TARGET_TRIPLET=x64-windows
 
       - name: Build
+        shell: pwsh
         run: cmake --build build --config $env:BUILD_TYPE --parallel
 
       - name: Prepare artifact
