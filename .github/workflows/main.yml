@@ -14,6 +14,11 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Setup MSVC
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
+
       - name: Cache vcpkg
         uses: actions/cache@v4
         with:
@@ -30,33 +35,89 @@ jobs:
           vcpkg install taglib sqlite3 curl --triplet x64-windows
           vcpkg integrate install
 
+      - name: Download mpv-dev (latest)
+        shell: pwsh
+        run: |
+          # 查询 shinchiro/mpv-winbuild-cmake 的最新 release，取 mpv-dev-x86_64 资源
+          $repo = "shinchiro/mpv-winbuild-cmake"
+          $release = Invoke-RestMethod -Uri "https://api.github.com/repos/$repo/releases/latest" `
+            -Headers @{ "User-Agent" = "github-actions" }
+          # 排除 v3 变体，取标准 x86_64
+          $asset = $release.assets | Where-Object {
+            $_.name -like "mpv-dev-x86_64-*.7z" -and $_.name -notlike "*-v3-*"
+          } | Select-Object -First 1
+          if (-not $asset) { throw "未找到 mpv-dev-x86_64 资源" }
+          Write-Host "下载: $($asset.name)"
+          Invoke-WebRequest -Uri $asset.browser_download_url -OutFile mpv-dev.7z
+          7z x mpv-dev.7z -ompv-dev-extract -y
+
+          Write-Host "===== 解压后文件列表 ====="
+          Get-ChildItem mpv-dev-extract -Recurse | Select-Object FullName
+
+          # 拷贝到 third_party/mpv/
+          New-Item -ItemType Directory -Force -Path third_party/mpv/include/mpv
+          # 头文件
+          Get-ChildItem mpv-dev-extract -Recurse -Filter "*.h" |
+            Where-Object { $_.DirectoryName -like "*\mpv" } |
+            ForEach-Object { Copy-Item $_.FullName third_party/mpv/include/mpv/ }
+          # dll（运行时依赖）
+          Get-ChildItem mpv-dev-extract -Recurse -Filter "mpv*.dll" |
+            ForEach-Object { Copy-Item $_.FullName third_party/mpv/ }
+          # def 文件
+          $defFile = Get-ChildItem mpv-dev-extract -Recurse -Filter "mpv.def" | Select-Object -First 1
+          if ($defFile) { Copy-Item $defFile.FullName third_party/mpv/ }
+
+          Write-Host "===== third_party/mpv 结构 ====="
+          Get-ChildItem third_party/mpv -Recurse | Select-Object FullName
+
+      - name: Generate mpv.lib from def
+        shell: pwsh
+        run: |
+          # shinchiro 的 mpv-dev 包不含 MSVC import library（mpv.lib），
+          # 只有 MinGW 的 libmpv.dll.a 和 mpv.def。
+          # 用 MSVC 的 lib.exe 从 .def 生成 mpv.lib（链接时指向 mpv-2.dll）。
+          Push-Location third_party/mpv
+          if (Test-Path mpv.lib) {
+            Write-Host "mpv.lib 已存在，跳过生成"
+          } elseif (Test-Path mpv.def) {
+            Write-Host "从 mpv.def 生成 mpv.lib ..."
+            & lib /def:mpv.def /name:mpv-2.dll /out:mpv.lib /MACHINE:X64
+            if ($LASTEXITCODE -ne 0) { throw "lib.exe 生成 mpv.lib 失败" }
+          } else {
+            throw "既无 mpv.lib 也无 mpv.def，无法生成 import library"
+          }
+          Write-Host "===== 生成后 third_party/mpv 结构 ====="
+          Get-ChildItem | Select-Object Name, Length
+          Pop-Location
 
       - name: Configure CMake
+        shell: pwsh
         run: |
           cmake -B build -S . `
-            -DCMAKE_BUILD_TYPE=${{ env.BUILD_TYPE }} `
+            -DCMAKE_BUILD_TYPE=$env:BUILD_TYPE `
             -DCMAKE_TOOLCHAIN_FILE=$env:VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake `
             -DVCPKG_TARGET_TRIPLET=x64-windows
 
       - name: Build
-        run: cmake --build build --config ${{ env.BUILD_TYPE }} --parallel
+        run: cmake --build build --config $env:BUILD_TYPE --parallel
 
       - name: Prepare artifact
         shell: pwsh
         run: |
           $out = "MEPlayer-release"
           New-Item -ItemType Directory -Force -Path $out
-          # 主程序
-          Copy-Item build/Release/MEPlayer.exe $out/ -ErrorAction SilentlyContinue
-          if (-not (Test-Path $out/MEPlayer.exe)) {
-            Copy-Item build/${{ env.BUILD_TYPE }}/MEPlayer.exe $out/ -ErrorAction SilentlyContinue
+          # 主程序（尝试多个可能路径）
+          $exe = "build/Release/MEPlayer.exe"
+          if (-not (Test-Path $exe)) { $exe = "build/$env:BUILD_TYPE/MEPlayer.exe" }
+          if (-not (Test-Path $exe)) {
+            $found = Get-ChildItem build -Recurse -Filter "MEPlayer.exe" | Select-Object -First 1
+            if ($found) { $exe = $found.FullName }
           }
-          if (-not (Test-Path $out/MEPlayer.exe)) {
-            Get-ChildItem build -Recurse -Filter "MEPlayer.exe" | Select-Object FullName
-            throw "未找到 MEPlayer.exe"
-          }
+          if (-not (Test-Path $exe)) { throw "未找到 MEPlayer.exe" }
+          Copy-Item $exe $out/
           # mpv 运行时
           Copy-Item third_party/mpv/mpv-2.dll $out/
+          Copy-Item third_party/mpv/mpv.dll $out/ -ErrorAction SilentlyContinue
           # vcpkg 动态库依赖（taglib/sqlite3/libcurl 等）
           if (Test-Path vcpkg_installed/x64-windows/bin) {
             Copy-Item vcpkg_installed/x64-windows/bin/*.dll $out/ -ErrorAction SilentlyContinue
@@ -67,7 +128,7 @@ jobs:
           Copy-Item assets/icons/app_icon.png $out/assets/icons/
           # appdata 占位目录
           New-Item -ItemType Directory -Force -Path $out/appdata/thumbnails
-          Write-Host "产物目录:"
+          Write-Host "===== 产物目录 ====="
           Get-ChildItem $out -Recurse | Select-Object FullName
 
       - name: Upload artifact
