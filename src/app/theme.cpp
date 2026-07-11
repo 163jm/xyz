@@ -6,10 +6,10 @@ namespace meplayer {
 
 D2D1_COLOR_F Theme::toColorF(uint32_t argb) {
     return D2D1::ColorF(
-        (argb >> 16) & 0xff,
-        (argb >> 8) & 0xff,
-        argb & 0xff,
-        (argb >> 24) & 0xff);
+        ((argb >> 16) & 0xff) / 255.0f,
+        ((argb >> 8) & 0xff) / 255.0f,
+        (argb & 0xff) / 255.0f,
+        ((argb >> 24) & 0xff) / 255.0f);
 }
 
 void Theme::rgbToHsl(float r, float g, float b, float& h, float& s, float& l) {
