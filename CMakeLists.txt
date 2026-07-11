@@ -65,10 +65,6 @@ if(NOT EXISTS "${MPV_ROOT}/mpv.lib" AND EXISTS "${MPV_ROOT}/mpv.def")
 endif()
 
 # ---- 资源 ----
-# Windows 应用图标（.rc 引用 .ico）
-configure_file(${CMAKE_SOURCE_DIR}/assets/icons/app_icon.ico
-               ${CMAKE_BINARY_DIR}/assets/app_icon.ico COPYONLY)
-
 # 资源头文件（包含程序图标资源）
 set(APP_RC ${CMAKE_SOURCE_DIR}/src/app.rc)
 
@@ -89,6 +85,12 @@ add_executable(MEPlayer WIN32
 target_include_directories(MEPlayer PRIVATE
     ${CMAKE_SOURCE_DIR}/src
     ${MPV_ROOT}/include
+)
+
+# .rc 中通过 APP_ICON_PATH 宏引用绝对路径的图标文件，
+# 避免因资源编译器工作目录与源码目录不一致导致找不到文件。
+set_source_files_properties(${APP_RC} PROPERTIES
+    COMPILE_DEFINITIONS "APP_ICON_PATH=\"${CMAKE_SOURCE_DIR}/assets/icons/app_icon.ico\""
 )
 
 target_link_libraries(MEPlayer PRIVATE
