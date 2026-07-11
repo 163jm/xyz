@@ -24,16 +24,13 @@ jobs:
         with:
           path: |
             ${{ env.VCPKG_ROOT }}/installed
-            vcpkg_installed
-          key: vcpkg-${{ runner.os }}-taglib-sqlite3-curl-${{ hashFiles('.github/workflows/build.yml') }}
+            build/vcpkg_installed
+          key: vcpkg-${{ runner.os }}-manifest-${{ hashFiles('vcpkg.json') }}
           restore-keys: vcpkg-${{ runner.os }}-
 
-      - name: Install dependencies via vcpkg
-        shell: pwsh
-        run: |
-          Write-Host "VCPKG_ROOT = $env:VCPKG_ROOT"
-          vcpkg install taglib sqlite3 curl --triplet x64-windows
-          vcpkg integrate install
+      # manifest 模式：vcpkg.json 声明依赖，CMake 配置时 toolchain 自动安装到
+      # build/vcpkg_installed/，find_package 查找路径自动对齐。
+      # 无需手动 vcpkg install。
 
       - name: Download mpv-dev (latest)
         shell: pwsh
@@ -148,9 +145,13 @@ jobs:
           Copy-Item $exe $out/
           # mpv 运行时（拷贝所有 dll，shinchiro 的名为 libmpv-2.dll）
           Copy-Item third_party/mpv/*.dll $out/ -ErrorAction SilentlyContinue
-          # vcpkg 动态库依赖（taglib/sqlite3/libcurl 等）
-          if (Test-Path vcpkg_installed/x64-windows/bin) {
-            Copy-Item vcpkg_installed/x64-windows/bin/*.dll $out/ -ErrorAction SilentlyContinue
+          # vcpkg 动态库依赖（manifest 模式装到 build/vcpkg_installed/）
+          $vcpkgBin = @("build/vcpkg_installed/x64-windows/bin", "vcpkg_installed/x64-windows/bin")
+          foreach ($p in $vcpkgBin) {
+            if (Test-Path $p) {
+              Copy-Item "$p/*.dll" $out/ -ErrorAction SilentlyContinue
+              break
+            }
           }
           # 资源
           New-Item -ItemType Directory -Force -Path $out/assets/icons
