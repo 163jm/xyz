@@ -287,22 +287,18 @@ public:
 };
 
 // ---- Stack（层叠）----
-// 命中测试只考虑当前可见的子项：IndexedStack 场景下（如 HomePage 的 4 个页面
-// 叠在同一 Stack 里，用 visible 切换显示哪个）若不过滤 invisible 子项，
-// 隐藏的页面依然会参与 hitTest，可能抢先命中并拦截本该发给可见页面的点击/悬停事件。
+// 命中测试只按 interactive 过滤，不看 visible：
+// visible 只控制"要不要画出来"，interactive 才是控制"要不要接收事件"的开关
+// （见 Widget::interactive 的注释：故意设计为可以 invisible 但 interactive，
+// 用作透明点击层，例如视频/音乐网格每张卡片顶部覆盖的不可见 ListTile 点击区）。
+// 如果这里改成按 visible 过滤，会直接破坏所有"不可见点击层"的点击。
+// IndexedStack 场景下真正想要"隐藏的页面不再接收事件"，应该由调用方
+// 同时把该页面的 interactive 设为 false（HomePage 已这样做）。
 class Stack : public MultiChildWidget {
 public:
     void layout(const Rect& b) override {
         bounds_ = b;
         for (auto& c : children) c->layout(b);
-    }
-    Widget* hitTest(float x, float y) override {
-        for (int i = static_cast<int>(children.size()) - 1; i >= 0; i--) {
-            if (!children[i]->visible || !children[i]->interactive) continue;
-            auto* h = children[i]->hitTest(x, y);
-            if (h) return h;
-        }
-        return nullptr;
     }
 };
 
