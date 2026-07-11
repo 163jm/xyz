@@ -30,26 +30,6 @@ jobs:
           vcpkg install taglib sqlite3 curl --triplet x64-windows
           vcpkg integrate install
 
-      - name: Download mpv-dev (latest)
-        shell: pwsh
-        run: |
-          # 查询 shinchiro/mpv-winbuild-cmake 的最新 release，取 mpv-dev-x86_64 资源
-          $repo = "shinchiro/mpv-winbuild-cmake"
-          $release = Invoke-RestMethod -Uri "https://api.github.com/repos/$repo/releases/latest" `
-            -Headers @{ "User-Agent" = "github-actions" }
-          $asset = $release.assets | Where-Object { $_.name -like "mpv-dev-x86_64-*.7z" } | Select-Object -First 1
-          if (-not $asset) { throw "未找到 mpv-dev-x86_64 资源" }
-          Write-Host "下载: $($asset.name)"
-          Invoke-WebRequest -Uri $asset.browser_download_url -OutFile mpv-dev.7z
-          7z x mpv-dev.7z -ompv-dev-extract -y
-          # 拷贝到 third_party/mpv/
-          New-Item -ItemType Directory -Force -Path third_party/mpv/include/mpv
-          Copy-Item mpv-dev-extract/include/mpv/*.h third_party/mpv/include/mpv/
-          Copy-Item mpv-dev-extract/mpv.lib third_party/mpv/
-          Copy-Item mpv-dev-extract/mpv-2.dll third_party/mpv/
-          Copy-Item mpv-dev-extract/mpv.dll third_party/mpv/ -ErrorAction SilentlyContinue
-          Write-Host "third_party/mpv 结构:"
-          Get-ChildItem third_party/mpv -Recurse | Select-Object FullName
 
       - name: Configure CMake
         run: |
