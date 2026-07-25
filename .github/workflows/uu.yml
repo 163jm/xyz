@@ -1,0 +1,171 @@
+#==========================================================================
+# 用途：诊断 ALARM 官方 aarch64 rootfs 里预装了哪些包
+#
+# 只做三件事，不做任何精简、不装额外包、不生成固件：
+#   1. 下载 ALARM 官方 rootfs tarball 并解压
+#   2. pacman-key 初始化后打印完整包列表（含大小、是否显式安装/依赖）
+#   3. 把包列表和体积构成打印到日志、同时打包成文件发布到 Release，
+#      方便直接下载查看，不用在 Actions 日志里翻页
+#
+# 跑完后把 Release 里的 arch-packages-report.txt 内容发给我，
+# 我据此判断哪些包能安全卸载，再产出正式的精简版 arch.yml
+#==========================================================================
+name: Inspect Arch Packages
+
+on:
+  workflow_dispatch: {}
+
+env:
+  TZ: UTC
+  ROOTFS_DIR: /builder/arch-rootfs
+
+jobs:
+  inspect:
+    runs-on: ubuntu-24.04-arm
+    if: ${{ github.event.repository.owner.id == github.event.sender.id }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # ── 1. 准备环境 ──────────────────────────────────────────────────
+      - name: Initialize environment
+        run: |
+          sudo -E apt-get -y update
+          sudo -E apt-get -y install \
+            arch-install-scripts libarchive-tools \
+            wget curl jq
+          sudo mkdir -p "${ROOTFS_DIR}"
+
+      # ── 2. 下载并解压 ALARM 官方 rootfs ────────────────────────────
+      - name: Download ALARM rootfs
+        run: |
+          set -euo pipefail
+          ALARM_MIRRORS=(
+            "https://fl.us.mirror.archlinuxarm.org/os/ArchLinuxARM-aarch64-latest.tar.gz"
+            "https://mirror.archlinuxarm.org/os/ArchLinuxARM-aarch64-latest.tar.gz"
+            "http://os.archlinuxarm.org/os/ArchLinuxARM-aarch64-latest.tar.gz"
+            "https://mirrors.tuna.tsinghua.edu.cn/archlinuxarm/os/ArchLinuxARM-aarch64-latest.tar.gz"
+          )
+          downloaded=0
+          for url in "${ALARM_MIRRORS[@]}"; do
+            echo "▶ 尝试下载: ${url}"
+            if wget -q --show-progress --tries=3 --timeout=30 -c -O /tmp/alarm-rootfs.tar.gz "${url}"; then
+              downloaded=1
+              echo "▶ 下载成功: ${url}"
+              break
+            fi
+            echo "::warning::下载失败: ${url}，尝试下一个镜像"
+          done
+          [[ "${downloaded}" -eq "1" ]] || { echo "::error::所有 ALARM 镜像均下载失败"; exit 1; }
+          echo "▶ tarball 大小: $(du -sh /tmp/alarm-rootfs.tar.gz | awk '{print $1}')"
+
+          echo "▶ 解压..."
+          sudo bsdtar -xpf /tmp/alarm-rootfs.tar.gz -C "${ROOTFS_DIR}"
+          rm -f /tmp/alarm-rootfs.tar.gz
+          echo "▶ 解压后未装任何包时的原始体积: $(sudo du -sh ${ROOTFS_DIR} | awk '{print $1}')"
+
+          sudo tee "${ROOTFS_DIR}/etc/resolv.conf" > /dev/null << 'EOF'
+          nameserver 8.8.8.8
+          nameserver 1.1.1.1
+          EOF
+
+      # ── 3. chroot 挂载点 + 初始化 pacman keyring ───────────────────
+      - name: Setup chroot and pacman keyring
+        run: |
+          set -euo pipefail
+          sudo mount -t proc     proc     "${ROOTFS_DIR}/proc"
+          sudo mount -t sysfs    sysfs    "${ROOTFS_DIR}/sys"
+          sudo mount --bind      /dev     "${ROOTFS_DIR}/dev"
+          sudo mount --bind      /dev/pts "${ROOTFS_DIR}/dev/pts"
+          sudo mount -t tmpfs    tmpfs    "${ROOTFS_DIR}/run"
+
+          sudo chroot "${ROOTFS_DIR}" /bin/bash -c "
+            pacman-key --init
+            pacman-key --populate archlinuxarm
+          "
+
+      # ── 4. 生成包列表报告 ────────────────────────────────────────────
+      - name: Generate package report
+        id: report
+        run: |
+          set -euo pipefail
+          OUT_DIR="${GITHUB_WORKSPACE}/output"
+          mkdir -p "${OUT_DIR}"
+          REPORT="${OUT_DIR}/arch-packages-report.txt"
+
+          {
+            echo "===================================================="
+            echo "ALARM aarch64 rootfs 预装包报告"
+            echo "生成时间: $(date -u '+%Y-%m-%d %H:%M UTC')"
+            echo "===================================================="
+            echo
+
+            echo "---- rootfs 总体积 ----"
+            sudo du -sh "${ROOTFS_DIR}"
+            echo
+
+            echo "---- 全部已安装包（含依赖），按安装体积从大到小排序 ----"
+            echo "格式: 体积(KB)  包名  版本"
+            sudo chroot "${ROOTFS_DIR}" pacman -Qi | awk '
+              /^Name/{name=$3}
+              /^Version/{ver=$3}
+              /^Installed Size/{
+                size=$4$5
+                print size"\t"name"\t"ver
+              }
+            ' | sort -rh
+            echo
+
+            echo "---- 显式安装的包（非依赖，即 base/base-devel 等组直接拉入的） ----"
+            sudo chroot "${ROOTFS_DIR}" pacman -Qe
+            echo
+
+            echo "---- 作为依赖被安装的包 ----"
+            sudo chroot "${ROOTFS_DIR}" pacman -Qd
+            echo
+
+            echo "---- 已安装的 group（如 base、base-devel）----"
+            sudo chroot "${ROOTFS_DIR}" pacman -Qg base 2>/dev/null || echo "(base 组信息不可用)"
+            echo
+            sudo chroot "${ROOTFS_DIR}" pacman -Qg base-devel 2>/dev/null || echo "(base-devel 未安装或不可用)"
+            echo
+
+            echo "---- /usr 下体积构成 Top 30（按目录，供交叉验证）----"
+            sudo du -h --max-depth=3 "${ROOTFS_DIR}/usr" 2>/dev/null | sort -rh | head -30
+            echo
+
+            echo "---- rootfs 根目录体积构成 ----"
+            sudo du -h --max-depth=1 "${ROOTFS_DIR}" 2>/dev/null | sort -rh
+          } | tee "${REPORT}"
+
+          echo "▶ 报告已生成: ${REPORT}"
+          echo "OUT_DIR=${OUT_DIR}" >> "${GITHUB_OUTPUT}"
+          echo "REPORT=${REPORT}"   >> "${GITHUB_OUTPUT}"
+
+      # ── 5. 卸载 chroot 挂载点 ────────────────────────────────────────
+      - name: Cleanup chroot mounts
+        if: always()
+        run: |
+          sudo umount -R "${ROOTFS_DIR}/run"      2>/dev/null || true
+          sudo umount -R "${ROOTFS_DIR}/dev/pts"  2>/dev/null || true
+          sudo umount -R "${ROOTFS_DIR}/dev"      2>/dev/null || true
+          sudo umount -R "${ROOTFS_DIR}/sys"      2>/dev/null || true
+          sudo umount -R "${ROOTFS_DIR}/proc"     2>/dev/null || true
+
+      # ── 6. 发布报告到 Release，方便直接下载查看 ──────────────────────
+      - name: Release report
+        uses: ncipollo/release-action@main
+        if: ${{ steps.report.outputs.REPORT != '' }}
+        with:
+          tag: "Arch_packages_report"
+          name: "Arch 预装包报告 · panther-x2"
+          artifacts: "${{ steps.report.outputs.REPORT }}"
+          allowUpdates: true
+          token: ${{ secrets.GITHUB_TOKEN }}
+          body: |
+            ## ALARM aarch64 rootfs 预装包报告
+
+            下载 `arch-packages-report.txt` 查看完整包列表和体积构成。
+
+            构建编号: `#${{ github.run_number }}`
